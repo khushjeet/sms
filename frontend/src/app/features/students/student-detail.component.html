@@ -1,0 +1,134 @@
+<div class="detail" *ngIf="!loading(); else loadingTpl">
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <div *ngIf="student() as s">
+    <div class="detail__header">
+      <div>
+        <h2>{{ s.user.full_name }}</h2>
+        <p>Admission #{{ s.admission_number }}</p>
+      </div>
+      <div class="detail__actions">
+        <button class="primary" type="button" (click)="downloadStudentPdf()" [disabled]="downloadingPdf()">
+          {{ downloadingPdf() ? 'Preparing...' : 'Download PDF' }}
+        </button>
+        <a class="primary" [routerLink]="['/students', s.id, 'edit']">Edit</a>
+        <button class="danger" (click)="deleteStudent()">Delete</button>
+      </div>
+    </div>
+
+    <div class="detail__grid">
+      <div class="card">
+        <h3>Profile</h3>
+        <img *ngIf="avatarUrl(s) as avatar" [src]="avatar" alt="Student profile" class="profile-image" />
+        <p><strong>Email:</strong> {{ s.user.email }}</p>
+        <p><strong>Status:</strong> {{ s.status }}</p>
+        <p><strong>Gender:</strong> {{ s.gender }}</p>
+        <p><strong>DOB:</strong> {{ s.date_of_birth }}</p>
+      </div>
+      <div class="card">
+        <h3>Current Enrollment</h3>
+        <p><strong>Class:</strong> {{ s.currentEnrollment?.section?.class?.name || '-' }}</p>
+        <p><strong>Section:</strong> {{ s.currentEnrollment?.section?.name || '-' }}</p>
+        <p><strong>Status:</strong> {{ s.currentEnrollment?.status || '-' }}</p>
+      </div>
+      <div class="card">
+        <h3>Account Password</h3>
+        <p class="muted">Set a new student login password.</p>
+        <div class="password-grid">
+          <label>
+            <span>New Password</span>
+            <div class="password-row">
+              <input
+                [type]="showNewPassword() ? 'text' : 'password'"
+                [value]="newPassword()"
+                (input)="newPassword.set(($any($event.target).value || '').toString())"
+                autocomplete="new-password"
+              />
+              <button class="secondary" type="button" (click)="showNewPassword.set(!showNewPassword())">
+                {{ showNewPassword() ? 'Hide' : 'Show' }}
+              </button>
+            </div>
+          </label>
+          <label>
+            <span>Confirm Password</span>
+            <div class="password-row">
+              <input
+                [type]="showConfirmPassword() ? 'text' : 'password'"
+                [value]="confirmPassword()"
+                (input)="confirmPassword.set(($any($event.target).value || '').toString())"
+                autocomplete="new-password"
+              />
+              <button class="secondary" type="button" (click)="showConfirmPassword.set(!showConfirmPassword())">
+                {{ showConfirmPassword() ? 'Hide' : 'Show' }}
+              </button>
+            </div>
+          </label>
+        </div>
+        <button class="primary" type="button" (click)="updatePassword()" [disabled]="updatingPassword()">
+          {{ updatingPassword() ? 'Updating...' : 'Update Password' }}
+        </button>
+        <p class="status" *ngIf="passwordMessage()">{{ passwordMessage() }}</p>
+      </div>
+    </div>
+
+    <div class="card" *ngIf="financialSummary() as summary">
+      <h3>Financial Summary</h3>
+      <div class="summary">
+        <span>Total Fees: {{ summary.total_fees }}</span>
+        <span>Total Paid: {{ summary.total_paid }}</span>
+        <span>Pending: {{ summary.pending_dues }}</span>
+      </div>
+      <div class="history" *ngFor="let row of summary.by_year">
+        <span>{{ row.academic_year }}</span>
+        <span>{{ row.total_fee }}</span>
+        <span>{{ row.total_paid }}</span>
+        <span>{{ row.pending }}</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Academic History</h3>
+      <p *ngIf="academicHistory().length === 0">No history yet.</p>
+      <div class="history-table-wrap" *ngIf="academicHistory().length > 0">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Academic Year</th>
+              <th>Class</th>
+              <th>Section</th>
+              <th>Roll No.</th>
+              <th>Enrollment Date</th>
+              <th>Status</th>
+              <th>Locked</th>
+              <th>Promoted From</th>
+              <th>Attendance</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of academicHistory()">
+              <td>{{ academicYearName(row) }}</td>
+              <td>{{ className(row) }}</td>
+              <td>{{ sectionName(row) }}</td>
+              <td>{{ row.roll_number ?? '-' }}</td>
+              <td>{{ formatHistoryDate(row.enrollment_date) }}</td>
+              <td>
+                <span class="status-badge" [class.status-active]="row.status === 'active'" [class.status-promoted]="row.status === 'promoted'">
+                  {{ row.status || '-' }}
+                </span>
+              </td>
+              <td>{{ row.is_locked ? 'Yes' : 'No' }}</td>
+              <td>{{ row.promoted_from_enrollment_id ?? '-' }}</td>
+              <td>{{ attendanceCount(row) }}</td>
+              <td>{{ row.remarks || '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<ng-template #loadingTpl>
+  <p>Loading student...</p>
+</ng-template>

@@ -1,0 +1,333 @@
+<section class="hr-payroll">
+  <div class="hr-payroll__header">
+    <h2>HR & Payroll</h2>
+    <p>Attendance lock, leave ledger, salary versioning, payroll snapshots, and adjustment entries.</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="message()">{{ message() }}</p>
+
+  <article class="card">
+    <h3>Daily Attendance + Month Lock</h3>
+    <form class="form" [formGroup]="attendanceForm" (ngSubmit)="markAttendance()">
+      <select formControlName="staff_id">
+        <option value="">Select staff</option>
+        <option *ngFor="let row of staffRows()" [value]="row.id">{{ staffLabel(row) }}</option>
+      </select>
+      <input type="date" formControlName="date" />
+      <select formControlName="status">
+        <option value="present">Present</option>
+        <option value="absent">Absent</option>
+        <option value="half_day">Half Day</option>
+        <option value="leave">Leave</option>
+      </select>
+      <input type="number" formControlName="late_minutes" placeholder="Late minutes (optional)" />
+      <input class="full" formControlName="remarks" placeholder="Remarks (optional)" />
+      <label class="inline">
+        <input type="checkbox" formControlName="override_locked_month" />
+        Admin override locked month
+      </label>
+      <input class="full" formControlName="override_reason" placeholder="Override reason (required when override is checked)" />
+      <button type="submit" [disabled]="busyAction() === 'attendance_mark'">
+        {{ busyAction() === 'attendance_mark' ? 'Saving...' : 'Save Attendance' }}
+      </button>
+    </form>
+
+    <form class="form form--line" [formGroup]="monthLockForm">
+      <select formControlName="period">
+        <option value="">Select month</option>
+        <option *ngFor="let period of payrollPeriods()" [value]="period.value">
+          {{ period.label }}{{ period.attendance_locked ? ' | Attendance Locked' : '' }}
+        </option>
+      </select>
+      <input formControlName="override_reason" placeholder="Unlock override reason" />
+      <button type="button" (click)="lockMonth()" [disabled]="busyAction() === 'attendance_lock'">
+        {{ busyAction() === 'attendance_lock' ? 'Locking...' : 'Lock Month' }}
+      </button>
+      <button type="button" class="ghost" (click)="unlockMonth()" [disabled]="busyAction() === 'attendance_unlock'">
+        {{ busyAction() === 'attendance_unlock' ? 'Unlocking...' : 'Unlock Month' }}
+      </button>
+    </form>
+  </article>
+
+  <article class="card">
+    <h3>Daily Staff Selfie Attendance (Approve)</h3>
+    <form class="form form--line" [formGroup]="selfieDailyFilterForm">
+      <input type="date" formControlName="date" />
+      <select formControlName="status">
+        <option value="">All status</option>
+        <option value="pending">Pending</option>
+        <option value="approved">Approved</option>
+        <option value="rejected">Rejected</option>
+      </select>
+      <button type="button" (click)="loadSelfieDailyAttendance()" [disabled]="busyAction() === 'attendance_selfie_list'">
+        {{ busyAction() === 'attendance_selfie_list' ? 'Loading...' : 'Load Daily List' }}
+      </button>
+    </form>
+
+    <div class="table" *ngIf="selfieDailyRows().length">
+      <div class="table__row table__row--head table__row--selfie">
+        <span>Employee</span><span>Punch In</span><span>Punch Out</span><span>Status</span><span>Images</span><span>Action</span>
+      </div>
+      <div class="table__row table__row--selfie" *ngFor="let row of selfieDailyRows()">
+        <span>{{ row.employee_id }} - {{ row.staff_name || row.staff_id }}</span>
+        <span>{{ row.punch_in_at || '-' }}</span>
+        <span>{{ row.punch_out_at || '-' }}</span>
+        <span>{{ row.review_status }}</span>
+        <span class="selfie-thumbs">
+          <img
+            *ngIf="row.punch_in_selfie_url"
+            [src]="row.punch_in_selfie_url"
+            alt="Punch in selfie"
+            (dblclick)="openSelfieViewer(row.punch_in_selfie_url)"
+          />
+          <img
+            *ngIf="row.punch_out_selfie_url"
+            [src]="row.punch_out_selfie_url"
+            alt="Punch out selfie"
+            (dblclick)="openSelfieViewer(row.punch_out_selfie_url)"
+          />
+        </span>
+        <span>
+          <button
+            type="button"
+            class="ghost"
+            (click)="approveSelfieAttendance(row.id)"
+            [disabled]="row.review_status === 'approved' || busyAction() === 'attendance_selfie_approve'"
+          >
+            {{ busyAction() === 'attendance_selfie_approve' ? 'Approving...' : 'Approve' }}
+          </button>
+        </span>
+      </div>
+    </div>
+    <p class="muted" *ngIf="!selfieDailyRows().length">No selfie attendance rows found for selected date.</p>
+  </article>
+
+  <article class="card">
+    <h3>Leave Ledger</h3>
+    <form class="form" [formGroup]="leaveRequestForm" (ngSubmit)="createLeaveRequest()">
+      <select formControlName="staff_id">
+        <option value="">Select staff</option>
+        <option *ngFor="let row of staffRows()" [value]="row.id">{{ staffLabel(row) }}</option>
+      </select>
+      <select formControlName="leave_type_id">
+        <option value="">Select leave type</option>
+        <option *ngFor="let type of leaveTypes()" [value]="type.id">{{ type.name }}</option>
+      </select>
+      <input type="date" formControlName="start_date" />
+      <input type="date" formControlName="end_date" />
+      <input class="full" formControlName="reason" placeholder="Leave reason" />
+      <button type="submit" [disabled]="busyAction() === 'leave_create'">
+        {{ busyAction() === 'leave_create' ? 'Submitting...' : 'Submit Leave Request' }}
+      </button>
+    </form>
+
+    <form class="form form--line" [formGroup]="leaveDecisionForm" (ngSubmit)="decideLeaveRequest()">
+      <input type="number" formControlName="leave_id" placeholder="Leave request ID" />
+      <select formControlName="status">
+        <option value="approved">Approve</option>
+        <option value="rejected">Reject</option>
+      </select>
+      <input formControlName="remarks" placeholder="Decision remarks" />
+      <button type="submit" [disabled]="busyAction() === 'leave_decide'">
+        {{ busyAction() === 'leave_decide' ? 'Saving...' : 'Save Decision' }}
+      </button>
+    </form>
+
+    <form class="form form--line" [formGroup]="leaveLedgerForm" (ngSubmit)="postLeaveLedger()">
+      <select formControlName="staff_id">
+        <option value="">Staff for ledger entry</option>
+        <option *ngFor="let row of staffRows()" [value]="row.id">{{ staffLabel(row) }}</option>
+      </select>
+      <select formControlName="leave_type_id">
+        <option value="">Any leave type</option>
+        <option *ngFor="let type of leaveTypes()" [value]="type.id">{{ type.name }}</option>
+      </select>
+      <select formControlName="entry_type">
+        <option value="credit">Credit</option>
+        <option value="adjustment">Adjustment</option>
+      </select>
+      <input type="number" step="0.01" formControlName="quantity" placeholder="Quantity" />
+      <input type="date" formControlName="entry_date" />
+      <input formControlName="remarks" placeholder="Ledger remarks" />
+      <button type="submit" [disabled]="busyAction() === 'leave_ledger'">
+        {{ busyAction() === 'leave_ledger' ? 'Posting...' : 'Post Ledger Entry' }}
+      </button>
+    </form>
+
+    <form class="form form--line" [formGroup]="leaveBalanceForm">
+      <select formControlName="staff_id">
+        <option value="">Staff for leave balance</option>
+        <option *ngFor="let row of staffRows()" [value]="row.id">{{ staffLabel(row) }}</option>
+      </select>
+      <select formControlName="leave_type_id">
+        <option value="">All leave types</option>
+        <option *ngFor="let type of leaveTypes()" [value]="type.id">{{ type.name }}</option>
+      </select>
+      <button type="button" (click)="loadLeaveBalance()" [disabled]="busyAction() === 'leave_balance'">
+        {{ busyAction() === 'leave_balance' ? 'Loading...' : 'Get Leave Balance' }}
+      </button>
+    </form>
+
+    <div class="kpi" *ngIf="leaveBalance() as lb">
+      <div><span>Credits</span><strong>{{ lb.credits }}</strong></div>
+      <div><span>Debits</span><strong>{{ lb.debits }}</strong></div>
+      <div><span>Adjustments</span><strong>{{ lb.adjustments }}</strong></div>
+      <div><span>Balance</span><strong>{{ lb.balance }}</strong></div>
+    </div>
+
+    <div class="table" *ngIf="leaveRequests().length">
+      <div class="table__row table__row--head table__row--leave">
+        <span>ID</span><span>Employee</span><span>Type</span><span>Dates</span><span>Days</span><span>Status</span><span>Action</span>
+      </div>
+      <div class="table__row table__row--leave" *ngFor="let row of leaveRequests()">
+        <span>{{ row.id }}</span>
+        <span>{{ row.employee_code || row.staff_id }}</span>
+        <span>{{ row.leave_type_id }}</span>
+        <span>{{ row.start_date }} to {{ row.end_date }}</span>
+        <span>{{ row.total_days }}</span>
+        <span>{{ row.status }}</span>
+        <span><button type="button" class="ghost" (click)="selectLeaveForDecision(row)">Use ID</button></span>
+      </div>
+    </div>
+  </article>
+
+  <article class="card" *ngIf="canEdit()">
+    <h3>Salary Templates + Version Assignment</h3>
+
+    <form class="form form--stack" [formGroup]="salaryTemplateForm" (ngSubmit)="createSalaryTemplate()">
+      <input formControlName="name" placeholder="Template name" />
+      <input formControlName="description" placeholder="Description (optional)" />
+      <label class="inline"><input type="checkbox" formControlName="is_active" /> Active template</label>
+
+      <div formArrayName="components" class="components">
+        <div class="component-row" *ngFor="let row of salaryComponents.controls; let i = index" [formGroupName]="i">
+          <input formControlName="component_name" placeholder="Component" />
+          <select formControlName="component_type">
+            <option value="earning">Earning</option>
+            <option value="deduction">Deduction</option>
+          </select>
+          <input type="number" step="0.01" formControlName="amount" placeholder="Amount" />
+          <input type="number" step="0.01" formControlName="percentage" placeholder="Percent (optional)" />
+          <button type="button" class="danger" (click)="removeSalaryComponentRow(i)">Remove</button>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="ghost" (click)="addSalaryComponentRow()">Add Component</button>
+        <button type="submit" [disabled]="busyAction() === 'salary_template_create'">
+          {{ busyAction() === 'salary_template_create' ? 'Creating...' : 'Create Template' }}
+        </button>
+      </div>
+    </form>
+
+    <form class="form form--line" [formGroup]="salaryAssignmentForm" (ngSubmit)="assignSalaryStructure()">
+      <select formControlName="staff_id">
+        <option value="">Select staff</option>
+        <option *ngFor="let row of staffRows()" [value]="row.id">{{ staffLabel(row) }}</option>
+      </select>
+      <select formControlName="salary_template_id">
+        <option value="">Select template</option>
+        <option *ngFor="let template of salaryTemplates()" [value]="template.id">
+          {{ template.id }} - {{ template.name }}
+        </option>
+      </select>
+      <input type="date" formControlName="effective_from" />
+      <input formControlName="notes" placeholder="Notes (optional)" />
+      <button type="submit" [disabled]="busyAction() === 'salary_assign'">
+        {{ busyAction() === 'salary_assign' ? 'Assigning...' : 'Assign Version' }}
+      </button>
+    </form>
+  </article>
+
+  <article class="card">
+    <h3>Payroll Snapshot + Finalization + Adjustments</h3>
+    <form class="form form--line" [formGroup]="payrollGenerateForm">
+      <select formControlName="period">
+        <option value="">Select payroll month</option>
+        <option *ngFor="let period of payrollPeriods()" [value]="period.value">
+          {{ period.label }}{{ period.payroll_status ? ' | ' + period.payroll_status : '' }}
+        </option>
+      </select>
+      <label class="inline"><input type="checkbox" formControlName="force_regenerate" /> Force regenerate</label>
+      <button type="button" (click)="generatePayroll()" [disabled]="busyAction() === 'payroll_generate'">
+        {{ busyAction() === 'payroll_generate' ? 'Generating...' : 'Generate Payroll' }}
+      </button>
+    </form>
+
+    <form class="form form--line" [formGroup]="payrollFilterForm">
+      <select formControlName="period">
+        <option value="">All periods</option>
+        <option *ngFor="let period of payrollPeriods()" [value]="period.value">{{ period.label }}</option>
+      </select>
+      <select formControlName="status">
+        <option value="">All statuses</option>
+        <option value="generated">Generated</option>
+        <option value="finalized">Finalized</option>
+        <option value="paid">Paid</option>
+      </select>
+      <button type="button" class="ghost" (click)="loadPayrollBatches()">Load Batches</button>
+    </form>
+
+    <div class="table" *ngIf="payrollBatches().length">
+      <div class="table__row table__row--head table__row--batch">
+        <span>ID</span><span>Period</span><span>Status</span><span>Items</span><span>Action</span>
+      </div>
+      <div class="table__row table__row--batch" *ngFor="let batch of payrollBatches()">
+        <span>{{ batch.id }}</span>
+        <span>{{ batch.year }}-{{ batch.month }}</span>
+        <span>{{ batch.status }}</span>
+        <span>{{ batch.items_count || 0 }}</span>
+        <span><button type="button" class="ghost" (click)="selectBatch(batch)">View</button></span>
+      </div>
+    </div>
+
+    <div *ngIf="payrollDetail() as detail" class="detail">
+      <div class="detail__head">
+        <h4>Batch #{{ detail.id }} ({{ detail.year }}-{{ detail.month }})</h4>
+        <div class="detail__actions">
+          <button type="button" (click)="finalizeSelectedBatch()" [disabled]="busyAction() === 'payroll_finalize'">
+            {{ busyAction() === 'payroll_finalize' ? 'Finalizing...' : 'Finalize' }}
+          </button>
+          <button type="button" class="ghost" (click)="markSelectedBatchPaid()" [disabled]="busyAction() === 'payroll_paid'">
+            {{ busyAction() === 'payroll_paid' ? 'Updating...' : 'Mark Paid' }}
+          </button>
+        </div>
+      </div>
+
+      <form class="form form--line" [formGroup]="adjustmentForm" (ngSubmit)="addAdjustment()">
+        <input type="number" formControlName="item_id" placeholder="Payroll item ID" />
+        <select formControlName="adjustment_type">
+          <option value="correction">Correction</option>
+          <option value="recovery">Recovery</option>
+          <option value="bonus">Bonus</option>
+        </select>
+        <input type="number" step="0.01" formControlName="amount" placeholder="Amount (+/-)" />
+        <input formControlName="remarks" placeholder="Adjustment remarks" />
+        <button type="submit" [disabled]="busyAction() === 'payroll_adjustment'">
+          {{ busyAction() === 'payroll_adjustment' ? 'Saving...' : 'Add Adjustment' }}
+        </button>
+      </form>
+
+      <div class="table" *ngIf="detail.items.length">
+        <div class="table__row table__row--head table__row--items">
+          <span>Item ID</span><span>Staff</span><span>Net</span><span>Gross</span><span>Deductions</span><span>Snapshot</span>
+        </div>
+        <div class="table__row table__row--items" *ngFor="let item of detail.items">
+          <span>{{ item.id }}</span>
+          <span>{{ item.staff_id }}</span>
+          <span>{{ item.net_pay }}</span>
+          <span>{{ item.gross_pay }}</span>
+          <span>{{ item.total_deductions }}</span>
+          <span><pre>{{ item.snapshot | json }}</pre></span>
+        </div>
+      </div>
+    </div>
+  </article>
+</section>
+
+<div class="image-viewer" *ngIf="selfieViewer()" (dblclick)="closeSelfieViewer()">
+  <div class="image-viewer__content">
+    <img [src]="selfieViewer()" alt="Attendance selfie preview" />
+    <button type="button" class="ghost" (click)="closeSelfieViewer()">Close</button>
+  </div>
+</div>

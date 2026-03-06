@@ -1,0 +1,63 @@
+<div class="subjects">
+  <div class="subjects__header">
+    <div>
+      <h2>{{ isTeacher() ? 'Allotted Subjects' : 'Subjects' }}</h2>
+      <p>{{ isTeacher() ? 'Only subjects allotted to your account are shown.' : 'Manage subject catalog and long-term academic mappings.' }}</p>
+    </div>
+    <div class="subjects__actions" *ngIf="canManage()">
+      <a routerLink="/subjects/assignments" class="secondary">Class Assignment</a>
+      <a routerLink="/subjects/new" class="primary">Add Subject</a>
+    </div>
+  </div>
+
+  <div class="subjects__filters">
+    <input
+      type="text"
+      [value]="search()"
+      (input)="onSearchInput($any($event.target).value)"
+      (keyup.enter)="load()"
+      placeholder="Search by name/code"
+    />
+    <select [value]="statusFilter()" (change)="onStatusChange($any($event.target).value)">
+      <option value="">All status</option>
+      <option value="active">Active</option>
+      <option value="inactive">Inactive</option>
+    </select>
+    <select [value]="typeFilter()" (change)="onTypeChange($any($event.target).value)">
+      <option value="">All types</option>
+      <option value="core">Core</option>
+      <option value="elective">Elective</option>
+      <option value="optional">Optional</option>
+    </select>
+    <button type="button" (click)="load()">Search</button>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <div class="table" *ngIf="!loading(); else loadingTpl">
+    <div class="table__row table__row--head">
+      <span>Name</span>
+      <span>Code</span>
+      <span>Type</span>
+      <span>Status</span>
+      <span>Actions</span>
+    </div>
+    <div class="table__row" *ngFor="let item of subjects()">
+      <span>{{ item.name }}</span>
+      <span>{{ item.subject_code || item.code }}</span>
+      <span>{{ item.type }}</span>
+      <span>{{ item.status }}</span>
+      <span class="actions">
+        <a [routerLink]="['/subjects', item.id]">View</a>
+        <a *ngIf="canManage()" [routerLink]="['/subjects', item.id, 'edit']">Edit</a>
+        <button *ngIf="canManage()" type="button" (click)="deleteSubject(item.id)">Delete</button>
+      </span>
+    </div>
+  </div>
+
+  <ng-template #loadingTpl>
+    <p>Loading subjects...</p>
+  </ng-template>
+
+  <p *ngIf="!loading() && isTeacher() && subjects().length === 0">No subject is allotted to your account yet.</p>
+</div>

@@ -1,0 +1,92 @@
+<section class="staff-payout">
+  <div class="staff-payout__header">
+    <h2>Staff Payout</h2>
+    <p>Generate payroll, finalize snapshot, mark payment, and post adjustments.</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="message()">{{ message() }}</p>
+
+  <article class="card">
+    <h3>Generate Payroll</h3>
+    <form class="form form--line" [formGroup]="generateForm">
+      <input type="number" formControlName="year" placeholder="Year" />
+      <input type="number" formControlName="month" placeholder="Month" />
+      <button type="button" (click)="generatePayroll()" [disabled]="busy() === 'generate'">
+        {{ busy() === 'generate' ? 'Generating...' : 'Generate' }}
+      </button>
+    </form>
+  </article>
+
+  <article class="card">
+    <h3>Payout Batches</h3>
+    <form class="form form--line" [formGroup]="filterForm">
+      <input type="number" formControlName="year" placeholder="Year" />
+      <input type="number" formControlName="month" placeholder="Month" />
+      <select formControlName="status">
+        <option value="">All</option>
+        <option value="generated">Generated</option>
+        <option value="finalized">Finalized</option>
+        <option value="paid">Paid</option>
+      </select>
+      <button type="button" class="ghost" (click)="loadBatches()" [disabled]="busy() === 'list'">
+        {{ busy() === 'list' ? 'Loading...' : 'Load' }}
+      </button>
+    </form>
+
+    <div class="table" *ngIf="batches().length">
+      <div class="table__row table__row--head table__row--batch">
+        <span>ID</span><span>Period</span><span>Status</span><span>Items</span><span>Action</span>
+      </div>
+      <div class="table__row table__row--batch" *ngFor="let batch of batches()">
+        <span>{{ batch.id }}</span>
+        <span>{{ batch.year }}-{{ batch.month }}</span>
+        <span>{{ batch.status }}</span>
+        <span>{{ batch.items_count || 0 }}</span>
+        <span><button type="button" class="ghost" (click)="selectBatch(batch.id)">Open</button></span>
+      </div>
+    </div>
+  </article>
+
+  <article class="card" *ngIf="detail() as row">
+    <div class="card__head">
+      <h3>Batch #{{ row.id }} ({{ row.year }}-{{ row.month }})</h3>
+      <div class="card__actions">
+        <button type="button" (click)="finalizeBatch()" [disabled]="busy() === 'finalize'">
+          {{ busy() === 'finalize' ? 'Finalizing...' : 'Finalize' }}
+        </button>
+        <button type="button" class="ghost" (click)="markBatchPaid()" [disabled]="busy() === 'mark_paid'">
+          {{ busy() === 'mark_paid' ? 'Updating...' : 'Mark Paid' }}
+        </button>
+      </div>
+    </div>
+
+    <form class="form form--line" [formGroup]="adjustmentForm">
+      <input type="number" formControlName="item_id" placeholder="Item ID" />
+      <select formControlName="adjustment_type">
+        <option value="correction">Correction</option>
+        <option value="recovery">Recovery</option>
+        <option value="bonus">Bonus</option>
+      </select>
+      <input type="number" step="0.01" formControlName="amount" placeholder="Amount (+/-)" />
+      <input formControlName="remarks" placeholder="Adjustment remarks" />
+      <button type="button" (click)="addAdjustment()" [disabled]="busy() === 'adjustment'">
+        {{ busy() === 'adjustment' ? 'Saving...' : 'Add Adjustment' }}
+      </button>
+    </form>
+
+    <div class="table" *ngIf="row.items.length">
+      <div class="table__row table__row--head table__row--items">
+        <span>Item</span><span>Staff</span><span>Net</span><span>Gross</span><span>Deductions</span><span>Snapshot</span>
+      </div>
+      <div class="table__row table__row--items" *ngFor="let item of row.items">
+        <span>{{ item.id }}</span>
+        <span>{{ item.staff_id }}</span>
+        <span>{{ item.net_pay }}</span>
+        <span>{{ item.gross_pay }}</span>
+        <span>{{ item.total_deductions }}</span>
+        <span><pre>{{ item.snapshot | json }}</pre></span>
+      </div>
+    </div>
+  </article>
+</section>

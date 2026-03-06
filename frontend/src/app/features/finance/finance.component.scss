@@ -1,0 +1,496 @@
+.finance {
+  display: grid;
+  gap: 24px;
+}
+
+.finance__hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 26px 28px;
+  border-radius: 24px;
+  background: linear-gradient(120deg, #0f172a 0%, #1f2937 55%, #0a4d2f 100%);
+  color: #f8fafc;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.25);
+}
+
+.finance__eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.7rem;
+  margin-bottom: 8px;
+  color: rgba(248, 250, 252, 0.7);
+}
+
+.finance__subtext {
+  max-width: 520px;
+  color: rgba(248, 250, 252, 0.8);
+}
+
+.finance__law {
+  min-width: 220px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  display: grid;
+  gap: 8px;
+}
+
+.finance__law span {
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  color: rgba(226, 232, 240, 0.7);
+}
+
+.finance__law strong {
+  font-size: 1.1rem;
+}
+
+.finance__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.finance__tabs button {
+  border: 1px solid #cbd5f5;
+  background: #ffffff;
+  padding: 10px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #0f172a;
+  transition: all 0.2s ease;
+}
+
+.finance__tabs button.active {
+  background: #0f172a;
+  color: #f8fafc;
+  border-color: #0f172a;
+}
+
+.finance__error {
+  color: #7f1d1d;
+  background: #fee2e2;
+  padding: 12px 16px;
+  border-radius: 12px;
+}
+
+.finance__kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.finance__student-pin {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+}
+
+.finance__student-pin-item {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.finance__student-pin-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.finance__student-pin-item strong {
+  font-size: 0.94rem;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kpi {
+  background: #f1f5f9;
+  border: 1px solid #dbe4ee;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.kpi span {
+  display: block;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.kpi strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 1.1rem;
+}
+
+.finance__grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.finance__stack {
+  display: grid;
+  gap: 18px;
+}
+
+.panel {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 20px 22px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  display: grid;
+  gap: 12px;
+}
+
+.panel__scroll {
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 6px;
+  overscroll-behavior: contain;
+}
+
+.panel__scroll--both {
+  overflow: auto;
+}
+
+.panel__scroll--x {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.panel__scroll--y {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.panel__scroll--wide {
+  max-height: 420px;
+}
+
+.panel--dark {
+  background: linear-gradient(140deg, #0f172a, #064e3b);
+  color: #f8fafc;
+}
+
+.panel--wide {
+  grid-column: 1 / -1;
+}
+
+.panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.form {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.form input,
+.form select {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #cbd5f5;
+  background: #f8fafc;
+}
+
+.form button {
+  border: none;
+  border-radius: 12px;
+  background: #0f172a;
+  color: #ffffff;
+  padding: 10px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.form button.btn-loading {
+  opacity: 0.95;
+}
+
+.form button.btn-loading span:last-child {
+  animation: financeAssignPulse 1s ease-in-out infinite;
+}
+
+.btn-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: financeAssignSpin 0.7s linear infinite;
+}
+
+@keyframes financeAssignSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes financeAssignPulse {
+  0%,
+  100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+button.ghost {
+  border: 1px solid #cbd5f5;
+  background: transparent;
+  color: #0f172a;
+}
+
+.payment-history__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.guardrails {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.guardrails li {
+  padding: 10px 12px;
+  background: rgba(248, 250, 252, 0.12);
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.table {
+  display: grid;
+  gap: 6px;
+}
+
+.table__row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.table__row > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table__wrap {
+  white-space: normal;
+  overflow: hidden;
+}
+
+.table--seven .table__row {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.table--eight .table__row {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+.table--four .table__row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.table--five .table__row {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.table--six .table__row {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.table--fee-heads .table__row {
+  grid-template-columns: 56px minmax(0, 2fr) minmax(0, 1fr) 90px;
+}
+
+.table--fee-heads {
+  min-width: 520px;
+}
+
+.table--installments .table__row {
+  grid-template-columns: 56px minmax(0, 1.4fr) minmax(0, 1.4fr) 110px 130px 130px 110px;
+}
+
+.table--ledger {
+  min-width: 820px;
+}
+
+.table--payments {
+  min-width: 820px;
+}
+
+.table--payments .table__row {
+  grid-template-columns: 52px 56px minmax(0, 1.2fr) 120px 110px 110px 100px 120px;
+}
+
+.table--holds {
+  min-width: 900px;
+}
+
+.table--due-report {
+  min-width: 980px;
+}
+
+.table--collection {
+  min-width: 900px;
+}
+
+.table--route-wise {
+  min-width: 900px;
+}
+
+.table--transport-assignments {
+  min-width: 980px;
+}
+
+.table__head {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #64748b;
+}
+
+.table__empty {
+  margin: 0;
+  color: #64748b;
+}
+
+.badge {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.ledger__balance {
+  display: flex;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #f1f5f9;
+}
+
+.ledger__balance strong {
+  display: block;
+  font-size: 1.2rem;
+}
+
+@media (max-width: 960px) {
+  .finance__hero {
+    flex-direction: column;
+  }
+
+  .finance__student-pin {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .table__row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .table--fee-heads .table__row {
+    grid-template-columns: 60px minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .table--installments .table__row {
+    grid-template-columns: 60px minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .finance__student-pin {
+    grid-template-columns: 1fr;
+  }
+}
+
+.finance__toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  min-width: 280px;
+  max-width: 420px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.15);
+  z-index: 9999;
+  animation: fadeSlide 0.25s ease;
+}
+
+.finance__toast button {
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+/* Types */
+.finance__toast--success {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.finance__toast--error {
+  background: #fee2e2;
+  color: #7f1d1d;
+  border: 1px solid #fecaca;
+}
+
+.finance__toast--warning {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.finance__toast--info {
+  background: #e0f2fe;
+  color: #075985;
+  border: 1px solid #bae6fd;
+}
+
+@keyframes fadeSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

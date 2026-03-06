@@ -1,0 +1,35 @@
+<div class="sections">
+  <div class="sections__header">
+    <div>
+      <h2>Sections</h2>
+      <p>Manage class sections for each academic year.</p>
+    </div>
+    <a routerLink="/sections/new" class="primary">Add Section</a>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <div class="table" *ngIf="!loading(); else loadingTpl">
+    <div class="table__row table__row--head">
+      <span>Section</span>
+      <span>Class</span>
+      <span>Academic Year</span>
+      <span>Status</span>
+      <span>Actions</span>
+    </div>
+    <div class="table__row" *ngFor="let section of sections()">
+      <span>{{ section.name }}</span>
+      <span>{{ section.class?.name }}</span>
+      <span>{{ section.academicYear?.name }}</span>
+      <span>{{ section.status }}</span>
+      <span class="actions">
+        <a [routerLink]="['/sections', section.id, 'edit']">Edit</a>
+        <button type="button" (click)="deleteSection(section.id)">Delete</button>
+      </span>
+    </div>
+  </div>
+
+  <ng-template #loadingTpl>
+    <p>Loading sections...</p>
+  </ng-template>
+</div>

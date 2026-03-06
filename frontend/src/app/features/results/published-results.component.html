@@ -1,0 +1,125 @@
+<div class="published-results">
+  <div class="published-results__header">
+    <h2>{{ isTeacher() ? 'Download Student Results' : 'Published Result' }}</h2>
+    <p>{{ isTeacher() ? 'View and download result papers for your allocated classes.' : 'View published records and generate result paper.' }}</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="message()">{{ message() }}</p>
+
+  <div class="publish-panel" *ngIf="canPublish()">
+    <h3>Class-wise Publish</h3>
+    <div class="publish-panel__controls">
+      <select [ngModel]="selectedClassId()" (ngModelChange)="onClassChange($event)">
+        <option value="">Select Class</option>
+        <option *ngFor="let cls of classes()" [value]="cls.id">{{ cls.name }}</option>
+      </select>
+
+      <select [ngModel]="selectedSessionId()" (ngModelChange)="onSessionChange($event)">
+        <option value="">Select Exam Session</option>
+        <option *ngFor="let session of sessions()" [value]="session.id">
+          {{ session.name }} ({{ session.status }}) - marks: {{ session.finalized_compiled_rows || 0 }}{{ session.latest_marked_on ? (' | date: ' + session.latest_marked_on) : '' }}
+        </option>
+      </select>
+      <button type="button" (click)="refreshSessions()" [disabled]="loadingSessions()">
+        {{ loadingSessions() ? 'Loading Sessions...' : 'Refresh Sessions' }}
+      </button>
+
+      <input type="date" [ngModel]="markedOn()" (ngModelChange)="markedOn.set($event)" />
+      <input
+        [ngModel]="publishReason()"
+        (ngModelChange)="publishReason.set($event)"
+        placeholder="Publish reason (optional)"
+      />
+
+      <button type="button" (click)="publishClassWise()" [disabled]="publishingClass()">
+        {{ publishingClass() ? 'Publishing...' : 'Publish Class-wise Result' }}
+      </button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <input
+      [ngModel]="search()"
+      (ngModelChange)="search.set($event)"
+      placeholder="Search by student, roll or registration no."
+    />
+    <button type="button" (click)="loadPublished()" [disabled]="loading()">
+      {{ loading() ? 'Loading...' : 'Load Published Result' }}
+    </button>
+  </div>
+
+  <div class="table" *ngIf="rows().length > 0">
+    <div class="table__row table__row--head">
+      <span>Serial</span>
+      <span>Student</span>
+      <span>Enrollment/Reg</span>
+      <span>Exam</span>
+      <span>Class</span>
+      <span>Result</span>
+      <span>Action</span>
+    </div>
+
+    <div class="table__row" *ngFor="let row of rows()">
+      <span>{{ row.serial_number }}</span>
+      <span>{{ row.student_name }}</span>
+      <span>{{ row.enrollment_number || '-' }} / {{ row.registration_number || '-' }}</span>
+      <span>{{ row.exam_name || '-' }}</span>
+      <span>{{ row.class_name || '-' }}</span>
+      <span>
+        {{ row.result_status }} ({{ row.percentage | number: '1.2-2' }}%)
+        <br />
+        <small>Visibility: {{ row.visibility_status }}</small>
+      </span>
+      <span>
+        <div class="row-actions">
+          <button type="button" (click)="viewPaper(row)" [disabled]="loadingPaper()">
+            {{ loadingPaper() ? 'Loading...' : 'Result Paper' }}
+          </button>
+          <button
+            *ngIf="canPublish() && row.visibility_status === 'visible'"
+            type="button"
+            class="danger"
+            (click)="hideResult(row)"
+            [disabled]="isVisibilityActionLoading(row.id)"
+          >
+            {{ isVisibilityActionLoading(row.id) ? 'Updating...' : 'Hide' }}
+          </button>
+          <button
+            *ngIf="canPublish() && row.visibility_status !== 'visible'"
+            type="button"
+            class="success"
+            (click)="showResult(row)"
+            [disabled]="isVisibilityActionLoading(row.id)"
+          >
+            {{ isVisibilityActionLoading(row.id) ? 'Updating...' : 'Show' }}
+          </button>
+        </div>
+      </span>
+    </div>
+  </div>
+
+  <p *ngIf="!loading() && rows().length === 0">No published results found.</p>
+
+  <div class="paper" *ngIf="selectedPaper() as payload">
+    <div class="paper__head">
+      <h3>Result Paper Preview</h3>
+      <div class="paper__actions">
+      <button type="button" class="print" (click)="printPaper()">Download / Print</button>
+        <button type="button" class="close" (click)="closePaper()">Close</button>
+      </div>
+    </div>
+
+    <div class="paper__meta">
+      <div><strong>School:</strong> {{ payload.school.name }}</div>
+      <div><strong>Address:</strong> {{ payload.school.address || '-' }}</div>
+      <div><strong>Student:</strong> {{ payload.result_paper.student_name }}</div>
+      <div><strong>Parent:</strong> {{ payload.result_paper.parents_name || '-' }}</div>
+      <div><strong>Address:</strong> {{ payload.result_paper.address || '-' }}</div>
+      <div><strong>Serial:</strong> {{ payload.result_paper.serial_number }}</div>
+      <div><strong>Enrollment/Reg:</strong> {{ payload.result_paper.enrollment_number || '-' }} / {{ payload.result_paper.registration_number || '-' }}</div>
+      <div><strong>Verify URL:</strong> {{ payload.result_paper.qr_verify_url }}</div>
+    </div>
+    <p class="paper__legend"><strong>A</strong> = Absent</p>
+  </div>
+</div>

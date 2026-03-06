@@ -1,0 +1,55 @@
+<div class="detail" *ngIf="!loading(); else loadingTpl">
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <div *ngIf="teacher() as t">
+    <div class="detail__header">
+      <div>
+        <h2>{{ fullName(t) }}</h2>
+        <p>{{ t.designation }} | Employee #{{ t.employee_id }}</p>
+      </div>
+      <div class="detail__actions">
+        <a class="primary" [routerLink]="['/teachers', t.id, 'edit']">Edit</a>
+        <button class="danger" type="button" (click)="deleteTeacher()">Archive</button>
+      </div>
+    </div>
+
+    <div class="detail__grid">
+      <div class="card">
+        <h3>Profile</h3>
+        <p><strong>Email:</strong> {{ t.user?.email }}</p>
+        <p><strong>Phone:</strong> {{ t.user?.phone || '-' }}</p>
+        <p><strong>Status:</strong> {{ t.status }}</p>
+        <p><strong>PAN Card:</strong> {{ t.pan_number || '-' }}</p>
+        <p><strong>Aadhar:</strong> {{ t.aadhar_number || '-' }}</p>
+      </div>
+      <div class="card">
+        <h3>Employment</h3>
+        <p><strong>Joining Date:</strong> {{ t.joining_date }}</p>
+        <p><strong>Department:</strong> {{ t.department || '-' }}</p>
+        <p><strong>Qualification:</strong> {{ t.qualification || '-' }}</p>
+        <p><strong>Salary:</strong> {{ t.salary || '-' }}</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Documents</h3>
+      <p *ngIf="!t.documents?.length">No documents uploaded yet.</p>
+      <div class="doc-row" *ngFor="let doc of t.documents">
+        <span>{{ doc.original_name }} ({{ doc.document_type }})</span>
+        <button
+          type="button"
+          class="link-btn"
+          [disabled]="downloadingDocumentId() === doc.id"
+          (click)="downloadDocument(doc)"
+        >
+          {{ downloadingDocumentId() === doc.id ? 'Preparing...' : 'Download' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<ng-template #loadingTpl>
+  <p>Loading teacher...</p>
+</ng-template>
+

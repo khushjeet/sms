@@ -1,0 +1,84 @@
+<div class="enrollments">
+  <div class="enrollments__header">
+    <div>
+      <h2>Enrollments</h2>
+      <p>Enrollment is academic-year specific and immutable once locked.</p>
+    </div>
+    <a routerLink="/enrollments/new" class="primary">New Enrollment</a>
+  </div>
+
+  <form [formGroup]="filters" (ngSubmit)="applyFilters()" class="enrollments__filters">
+    <input formControlName="search" placeholder="Search student / admission / email / enrollment" />
+    <select formControlName="academic_year_id">
+      <option value="">All years</option>
+      <option *ngFor="let year of academicYears()" [value]="year.id">
+        {{ year.name }}
+      </option>
+    </select>
+    <select formControlName="class_id">
+      <option value="">All classes</option>
+      <option *ngFor="let classItem of classes()" [value]="classItem.id">
+        {{ classItem.name }}
+      </option>
+    </select>
+    <input formControlName="section_search" placeholder="Search sections" />
+    <select formControlName="section_id">
+      <option value="">All sections</option>
+      <option *ngFor="let section of filteredSections()" [value]="section.id">
+        {{ section.class?.name }} - {{ section.name }}
+      </option>
+    </select>
+    <div class="enrollments__mini-pager" *ngIf="sectionsPagination().last_page > 1">
+      <button type="button" (click)="previousSectionsPage()">◀</button>
+      <span>Sections {{ sectionsPagination().current_page }} / {{ sectionsPagination().last_page }}</span>
+      <button type="button" (click)="nextSectionsPage()">▶</button>
+    </div>
+    <select formControlName="status">
+      <option value="">All statuses</option>
+      <option value="active">Active</option>
+      <option value="promoted">Promoted</option>
+      <option value="repeated">Repeated</option>
+      <option value="transferred">Transferred</option>
+      <option value="dropped">Dropped</option>
+    </select>
+    <input formControlName="student_id" placeholder="Student ID" />
+    <select formControlName="per_page">
+      <option value="15">15 / page</option>
+      <option value="25">25 / page</option>
+      <option value="50">50 / page</option>
+      <option value="100">100 / page</option>
+    </select>
+    <button type="submit">Filter</button>
+  </form>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <div class="table" *ngIf="!loading(); else loadingTpl">
+    <div class="table__row table__row--head">
+      <span>Student</span>
+      <span>Academic Year</span>
+      <span>Class / Section</span>
+      <span>Status</span>
+      <span>Actions</span>
+    </div>
+    <div class="table__row" *ngFor="let enrollment of enrollments()">
+      <span>{{ getStudentName(enrollment) }}</span>
+      <span>{{ getAcademicYearName(enrollment) }}</span>
+      <span>{{ getClassSection(enrollment) }}</span>
+      <span>{{ enrollment.status }}</span>
+      <span>
+        <a [routerLink]="['/enrollments', enrollment.id]">View</a>
+      </span>
+    </div>
+  </div>
+
+  <ng-template #loadingTpl>
+    <p>Loading enrollments...</p>
+  </ng-template>
+
+  <div class="pagination">
+    <button type="button" (click)="previousPage()">Previous</button>
+    <span>Page {{ pagination().current_page }} of {{ pagination().last_page }} ({{ pagination().total }} total)</span>
+    <button type="button" (click)="nextPage()">Next</button>
+  </div>
+</div>

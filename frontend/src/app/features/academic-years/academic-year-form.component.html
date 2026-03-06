@@ -1,0 +1,39 @@
+<div class="form" *ngIf="!loading(); else loadingTpl">
+  <div class="form__header">
+    <h2>{{ isEdit() ? 'Edit Academic Year' : 'New Academic Year' }}</h2>
+    <p>Academic years drive enrollment and attendance boundaries.</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" class="form__grid">
+    <label>
+      <span>Name *</span>
+      <input formControlName="name" />
+    </label>
+    <label>
+      <span>Start Date *</span>
+      <input formControlName="start_date" type="date" />
+    </label>
+    <label>
+      <span>End Date *</span>
+      <input formControlName="end_date" type="date" />
+    </label>
+    <label class="checkbox">
+      <input type="checkbox" formControlName="is_current" />
+      <span>Set as current year</span>
+    </label>
+    <label class="span-2">
+      <span>Description</span>
+      <textarea formControlName="description" rows="3"></textarea>
+    </label>
+
+    <div class="span-2">
+      <button type="submit">{{ isEdit() ? 'Save Changes' : 'Create Year' }}</button>
+    </div>
+  </form>
+</div>
+
+<ng-template #loadingTpl>
+  <p>Loading...</p>
+</ng-template>

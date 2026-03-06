@@ -1,0 +1,88 @@
+<div class="assignments">
+  <div class="assignments__header">
+    <div>
+      <h2>Subject Teacher Assign</h2>
+      <p>Assign one subject to multiple teachers for a section and academic year.</p>
+    </div>
+    <a routerLink="/subjects" class="secondary">Back to Subjects</a>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="success()">{{ success() }}</p>
+
+  <div class="card">
+    <label for="subject_id">Subject</label>
+    <select id="subject_id" [value]="form.getRawValue().subject_id" (change)="onSubjectChange($any($event.target).value)">
+      <option value="">Select subject</option>
+      <option *ngFor="let s of subjects()" [value]="s.id">{{ s.name }} ({{ s.subject_code || s.code }})</option>
+    </select>
+  </div>
+
+  <div class="card" *ngIf="selectedSubject() as subject">
+    <h3>{{ subject.name }} - Teacher Assignment</h3>
+    <form [formGroup]="form" (ngSubmit)="saveAssignments()" class="mapping-form">
+      <label>
+        Academic Year
+        <select formControlName="academic_year_id" (change)="onAcademicYearChange($any($event.target).value)">
+          <option value="">Select year</option>
+          <option *ngFor="let y of academicYears()" [value]="y.id">{{ y.name }}{{ y.is_current ? ' (Current)' : '' }}</option>
+        </select>
+      </label>
+
+      <label>
+        Exam Configuration
+        <select formControlName="academic_year_exam_config_id">
+          <option value="">Select exam</option>
+          <option *ngFor="let exam of examConfigurations()" [value]="exam.id">
+            {{ exam.sequence }}. {{ exam.name }}
+          </option>
+        </select>
+      </label>
+
+      <label>
+        Section
+        <select formControlName="section_id">
+          <option value="">Select section</option>
+          <option *ngFor="let sec of filteredSections()" [value]="sec.id">{{ sectionLabel(sec) }}</option>
+        </select>
+      </label>
+
+      <label class="teacher-multi">
+        Teachers (multiple)
+        <select formControlName="teacher_ids" multiple>
+          <option *ngFor="let teacher of teachingStaff()" [value]="teacher.user_id">{{ teacherLabel(teacher) }}</option>
+        </select>
+      </label>
+
+      <button type="submit" class="primary" [disabled]="saving()">
+        {{ saving() ? 'Saving...' : 'Save Teacher Assignment' }}
+      </button>
+    </form>
+  </div>
+
+  <div class="card" *ngIf="selectedSubject() as subject">
+    <h3>Current Teacher Assignments</h3>
+    <p *ngIf="assignments().length === 0">No teacher assignments yet.</p>
+
+    <div class="table" *ngIf="assignments().length > 0">
+      <div class="table__row table__row--head">
+        <span>Teacher</span>
+        <span>Class-Section</span>
+        <span>Academic Year</span>
+        <span>Exam</span>
+        <span>Action</span>
+      </div>
+      <div class="table__row" *ngFor="let row of assignments()">
+        <span>{{ row.teacher_name }}</span>
+        <span>{{ row.class_name }} - {{ row.section_name }}</span>
+        <span>{{ row.academic_year_name }}</span>
+        <span>{{ row.academic_year_exam_config_name || ('ID #' + (row.academic_year_exam_config_id || '-')) }}</span>
+        <span>
+          <button type="button" class="danger" (click)="removeAssignment(row.id)">Remove</button>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <p *ngIf="loading()">Loading...</p>
+</div>

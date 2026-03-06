@@ -1,0 +1,159 @@
+.detail__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.detail__actions {
+  display: flex;
+  gap: 12px;
+}
+
+.primary {
+  padding: 10px 16px;
+  background: #16a34a;
+  color: #fff;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 600;
+  border: none;
+}
+
+.danger {
+  padding: 10px 16px;
+  background: #b91c1c;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.detail__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.card__title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.card__title h3 {
+  margin: 0;
+}
+
+.row-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.filter-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.filter-row input,
+.filter-row select {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.primary-btn {
+  border: none;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #fff;
+  padding: 10px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.history-table {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: auto;
+}
+
+.history-table__row {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border-top: 1px solid #e2e8f0;
+  align-items: center;
+}
+
+.history-table__head {
+  border-top: none;
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+.history-table__attendance {
+  grid-template-columns: 120px 120px 80px 1.4fr 1.2fr;
+}
+
+.history-table__payout {
+  grid-template-columns: 100px 90px 100px 100px 100px 100px 110px 150px;
+}
+
+.empty {
+  margin: 0;
+  color: #64748b;
+}
+
+.doc-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #e2e8f0;
+  padding: 10px 0;
+}
+
+.link-btn {
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  padding: 0;
+  cursor: pointer;
+}
+
+.error {
+  color: #b91c1c;
+  background: #fee2e2;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.success {
+  color: #166534;
+  background: #dcfce7;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+@media (max-width: 980px) {
+  .card__title {
+    display: grid;
+  }
+
+  .history-table__attendance,
+  .history-table__payout {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,162 @@
+<div class="attendance">
+  <div class="attendance__header">
+    <h2>Attendance</h2>
+    <p>Mark, review, and lock attendance by section and date.</p>
+  </div>
+
+  <div class="card">
+    <h3>Student Attendance Reports</h3>
+    <p>Use live search by student/admission/enrollment ID, select class(es) and session, then download monthly/session or bulk Excel/PDF.</p>
+    <form [formGroup]="reportForm" class="form">
+      <input formControlName="student_id" placeholder="Student ID or Admission Number" />
+      <input
+        formControlName="live_query"
+        placeholder="Realtime search: student/admission/enrollment ID"
+        (input)="onReportQueryInput($any($event.target).value)"
+      />
+      <input formControlName="enrollment_id" placeholder="Enrollment ID (from live search)" />
+      <input formControlName="student_ids" placeholder="Student IDs (auto-filled, comma separated)" />
+      <select formControlName="month">
+        <option *ngFor="let month of monthOptions" [value]="month.value">{{ month.label }}</option>
+      </select>
+      <select formControlName="academic_year_id">
+        <option value="">Select Session</option>
+        <option *ngFor="let year of academicYears()" [value]="year.id">
+          {{ year.name }}{{ year.is_current ? ' (Current)' : '' }}
+        </option>
+      </select>
+      <select multiple (change)="onClassSelectionChange($event)">
+        <option *ngFor="let classItem of classes()" [value]="classItem.id">
+          {{ classItem.name }}
+        </option>
+      </select>
+
+      <button type="button" (click)="searchStudents()" [disabled]="busyAction() !== null">
+        {{ isBusy('search') ? 'Searching...' : 'Search Student' }}
+      </button>
+      <button type="button" (click)="runLiveSearch()" [disabled]="busyAction() !== null">
+        {{ isBusy('live') ? 'Searching...' : 'Realtime Search' }}
+      </button>
+      <button type="button" class="btn-save" (click)="downloadMonthlyReport()" [disabled]="busyAction() !== null">
+        {{ isBusy('monthly') ? 'Preparing...' : 'Download Monthly' }}
+      </button>
+      <button type="button" class="btn-lock" (click)="downloadSessionWiseReport()" [disabled]="busyAction() !== null">
+        {{ isBusy('session') ? 'Preparing...' : 'Download Session Wise' }}
+      </button>
+      <button type="button" class="btn-save" (click)="downloadBulkExcel()" [disabled]="busyAction() !== null">
+        {{ isBusy('bulk_excel') ? 'Preparing...' : 'Bulk Excel' }}
+      </button>
+      <button type="button" class="btn-lock" (click)="downloadBulkPdf()" [disabled]="busyAction() !== null">
+        {{ isBusy('bulk_pdf') ? 'Preparing...' : 'Bulk PDF' }}
+      </button>
+    </form>
+
+    <p class="legend">Status codes: Present = P, Absent = A, Leave = L, Half Day = HD, Not Marked = NM.</p>
+
+    <div class="table" *ngIf="liveSearchResults().length">
+      <div class="table__row table__row--head table__row--compact">
+        <span>Enroll #</span>
+        <span>Student</span>
+        <span>Class</span>
+        <span>Section</span>
+        <span>Action</span>
+      </div>
+      <div class="table__row table__row--compact" *ngFor="let item of liveSearchResults()">
+        <span>{{ item.enrollment_id }}</span>
+        <span>{{ item.student_name || '-' }}</span>
+        <span>{{ item.class || '-' }}</span>
+        <span>{{ item.section || '-' }}</span>
+        <span><button type="button" (click)="selectLiveSearchRow(item)">Select</button></span>
+      </div>
+    </div>
+
+    <div class="table" *ngIf="reportStudents().length">
+      <div class="table__row table__row--head table__row--compact">
+        <span>Student ID</span>
+        <span>Name</span>
+        <span>Class</span>
+        <span>Section</span>
+        <span>Session</span>
+      </div>
+      <div class="table__row table__row--compact" *ngFor="let item of reportStudents()">
+        <span>{{ item.student_id }}</span>
+        <span>{{ item.student_name }}</span>
+        <span>{{ item.class || '-' }}</span>
+        <span>{{ item.section || '-' }}</span>
+        <span>{{ item.session || '-' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="message()">{{ message() }}</p>
+
+  <form [formGroup]="form" class="form">
+    <select formControlName="section_id">
+      <option value="">Select section</option>
+      <option *ngFor="let section of sections()" [value]="section.id">
+        {{ section.class?.name }} - {{ section.name }}
+      </option>
+    </select>
+    <input formControlName="date" type="date" />
+    <button type="button" (click)="loadAttendance()" [disabled]="busyAction() !== null">
+      {{ isBusy('load') ? 'Loading...' : 'Load Attendance' }}
+    </button>
+    <button
+      type="button"
+      class="btn-save"
+      [class.btn-save--done]="flashAction() === 'save'"
+      (click)="markAttendance()"
+      [disabled]="busyAction() !== null"
+    >
+      <span class="btn-spinner" *ngIf="isBusy('save')"></span>
+      {{ isBusy('save') ? 'Saving...' : (flashAction() === 'save' ? 'Saved' : 'Save Attendance') }}
+    </button>
+    <button
+      type="button"
+      class="btn-lock"
+      [class.btn-lock--done]="flashAction() === 'lock'"
+      (click)="lockAttendance()"
+      [disabled]="busyAction() !== null"
+    >
+      <span class="btn-spinner" *ngIf="isBusy('lock')"></span>
+      {{ isBusy('lock') ? 'Locking...' : (flashAction() === 'lock' ? 'Locked' : 'Lock Attendance') }}
+    </button>
+
+    <input formControlName="start_date" type="date" />
+    <input formControlName="end_date" type="date" />
+    <button type="button" (click)="loadStatistics()" [disabled]="busyAction() !== null">
+      {{ isBusy('stats') ? 'Loading Stats...' : 'Load Statistics' }}
+    </button>
+  </form>
+
+  <div class="table" *ngIf="attendanceList().length">
+    <div class="table__row table__row--head">
+      <span>Roll #</span>
+      <span>Student</span>
+      <span>Status</span>
+      <span>Remarks</span>
+    </div>
+    <div class="table__row" *ngFor="let item of attendanceList()">
+      <span>{{ item.roll_number || '-' }}</span>
+      <span>{{ item.student_name }}</span>
+      <span>
+        <select [ngModel]="item.status" (ngModelChange)="updateStatus(item, $event)">
+          <option value="present">Present</option>
+          <option value="absent">Absent</option>
+          <option value="leave">Leave</option>
+          <option value="half_day">Half Day</option>
+          <option value="not_marked">Not Marked</option>
+        </select>
+      </span>
+      <span>
+        <input [(ngModel)]="item.remarks" placeholder="Remarks" />
+      </span>
+    </div>
+  </div>
+
+  <div class="card" *ngIf="statistics() as stats">
+    <h3>Section Statistics</h3>
+    <pre>{{ stats | json }}</pre>
+  </div>
+</div>

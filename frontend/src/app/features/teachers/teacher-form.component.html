@@ -1,0 +1,163 @@
+<div class="form" *ngIf="!loading(); else loadingTpl">
+  <div class="form__header">
+    <h2>{{ isEdit() ? 'Edit Teacher' : 'Add Teacher' }}</h2>
+    <p>Create durable teacher profiles with documents and resume uploads.</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <form [formGroup]="form" (ngSubmit)="submit()">
+    <fieldset class="section form__grid">
+      <legend>Personal Information</legend>
+
+      <label>
+        <span>First Name *</span>
+        <input formControlName="first_name" />
+      </label>
+      <label>
+        <span>Last Name *</span>
+        <input formControlName="last_name" />
+      </label>
+      <label>
+        <span>Email *</span>
+        <input formControlName="email" type="email" />
+      </label>
+      <label>
+        <span>Phone</span>
+        <input formControlName="phone" />
+      </label>
+      <label *ngIf="!isEdit()">
+        <span>Password *</span>
+        <input formControlName="password" type="password" autocomplete="new-password" />
+      </label>
+      <label>
+        <span>Date of Birth *</span>
+        <input formControlName="date_of_birth" type="date" />
+      </label>
+      <label>
+        <span>Gender *</span>
+        <select formControlName="gender">
+          <option value="">Select</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label>
+        <span>Profile Image</span>
+        <input type="file" accept="image/*" (change)="onImageSelected($event)" />
+        <small *ngIf="selectedImageName()">Selected: {{ selectedImageName() }}</small>
+      </label>
+      <label class="span-2">
+        <span>Address</span>
+        <input formControlName="address" />
+      </label>
+      <label>
+        <span>Emergency Contact</span>
+        <input formControlName="emergency_contact" />
+      </label>
+      <label>
+        <span>Aadhar Number</span>
+        <input formControlName="aadhar_number" />
+      </label>
+      <label>
+        <span>PAN Card Number</span>
+        <input formControlName="pan_card" />
+      </label>
+    </fieldset>
+
+    <fieldset class="section form__grid">
+      <legend>Employment</legend>
+
+      <label>
+        <span>Employee ID *</span>
+        <input formControlName="employee_id" />
+      </label>
+      <label>
+        <span>Joining Date *</span>
+        <input formControlName="joining_date" type="date" />
+      </label>
+      <label>
+        <span>Designation</span>
+        <input formControlName="designation" />
+      </label>
+      <label>
+        <span>Department</span>
+        <input formControlName="department" />
+      </label>
+      <label>
+        <span>Qualification</span>
+        <input formControlName="qualification" />
+      </label>
+      <label>
+        <span>Salary</span>
+        <input formControlName="salary" type="number" step="0.01" />
+      </label>
+      <label>
+        <span>Status</span>
+        <select formControlName="status">
+          <option value="active">Active</option>
+          <option value="on_leave">On Leave</option>
+          <option value="resigned">Resigned</option>
+          <option value="terminated">Terminated</option>
+        </select>
+      </label>
+      <label>
+        <span>Resignation Date</span>
+        <input formControlName="resignation_date" type="date" />
+      </label>
+    </fieldset>
+
+    <fieldset class="section">
+      <legend>Resume & Documents (Drag and Drop)</legend>
+
+      <div
+        class="dropzone"
+        [class.dropzone--active]="isDragActive()"
+        (dragover)="onDragOver($event)"
+        (dragleave)="onDragLeave($event)"
+        (drop)="onDrop($event)"
+      >
+        <p>Drop resume/documents/images here, or click to select files.</p>
+        <p class="muted">Accepted: PDF, DOC, DOCX, JPG, PNG, WEBP</p>
+        <input type="file" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" (change)="onDocumentsSelected($event)" />
+      </div>
+
+      <div class="pending-files" *ngIf="pendingDocuments().length">
+        <div class="pending-file" *ngFor="let doc of pendingDocuments(); let i = index">
+          <span>{{ doc.file.name }}</span>
+          <select [value]="doc.type" (change)="changePendingDocumentType(i, $any($event.target).value)">
+            <option *ngFor="let t of documentTypes" [value]="t.value">{{ t.label }}</option>
+          </select>
+          <button type="button" class="link-btn danger-btn" (click)="removePendingDocument(i)">Remove</button>
+        </div>
+      </div>
+
+      <div class="pending-files" *ngIf="isEdit() && existingTeacher()?.documents?.length">
+        <h4>Already Uploaded</h4>
+        <div class="pending-file" *ngFor="let doc of existingTeacher()?.documents">
+          <span>{{ doc.original_name }} ({{ doc.document_type }})</span>
+          <button
+            type="button"
+            class="link-btn"
+            [disabled]="downloadingDocumentId() === doc.id"
+            (click)="downloadExistingDocument(doc.id)"
+          >
+            {{ downloadingDocumentId() === doc.id ? 'Preparing...' : 'Download' }}
+          </button>
+        </div>
+      </div>
+    </fieldset>
+
+    <div class="actions">
+      <button type="submit" [disabled]="submitting()">
+        {{ submitting() ? 'Submitting...' : (isEdit() ? 'Save Changes' : 'Create Teacher') }}
+      </button>
+    </div>
+  </form>
+</div>
+
+<ng-template #loadingTpl>
+  <p>Loading...</p>
+</ng-template>
+

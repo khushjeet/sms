@@ -1,0 +1,56 @@
+<div class="teachers">
+  <div class="teachers__header">
+    <div>
+      <h2>Teachers</h2>
+      <p>Create and manage teacher profiles with durable document records.</p>
+    </div>
+    <a routerLink="/teachers/new" class="primary">Add Teacher</a>
+  </div>
+
+  <form [formGroup]="filters" (ngSubmit)="applyFilters()" class="teachers__filters">
+    <input type="text" formControlName="search" placeholder="Search by employee ID, name, email, PAN" />
+    <select formControlName="status">
+      <option value="">All statuses</option>
+      <option value="active">Active</option>
+      <option value="on_leave">On Leave</option>
+      <option value="resigned">Resigned</option>
+      <option value="terminated">Terminated</option>
+    </select>
+    <button type="submit">Filter</button>
+  </form>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <div class="table" *ngIf="!loading(); else loadingTpl">
+    <div class="table__row table__row--head">
+      <span>Employee ID</span>
+      <span>Name</span>
+      <span>Designation</span>
+      <span>PAN</span>
+      <span>Status</span>
+      <span>Actions</span>
+    </div>
+    <div class="table__row" *ngFor="let teacher of teachers()">
+      <span>{{ teacher.employee_id }}</span>
+      <span>{{ teacherName(teacher) }}</span>
+      <span>{{ teacher.designation || '-' }}</span>
+      <span>{{ teacher.pan_number || '-' }}</span>
+      <span>{{ teacher.status }}</span>
+      <span class="actions">
+        <a [routerLink]="['/teachers', teacher.id]">View</a>
+        <a [routerLink]="['/teachers', teacher.id, 'edit']">Edit</a>
+      </span>
+    </div>
+  </div>
+
+  <ng-template #loadingTpl>
+    <p>Loading teachers...</p>
+  </ng-template>
+
+  <div class="pagination">
+    <button type="button" (click)="previousPage()">Previous</button>
+    <span>Page {{ pagination().current_page }} of {{ pagination().last_page }}</span>
+    <button type="button" (click)="nextPage()">Next</button>
+  </div>
+</div>
+

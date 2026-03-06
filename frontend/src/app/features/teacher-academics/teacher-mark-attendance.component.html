@@ -1,0 +1,46 @@
+<div class="attendance">
+  <div class="attendance__header">
+    <h2>Mark Attendance</h2>
+    <p>Attendance is limited to your allotted subject/section assignments.</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="message()">{{ message() }}</p>
+
+  <div class="form">
+    <select [ngModel]="assignmentId()" (ngModelChange)="assignmentId.set($event); loadSheet()">
+      <option value="">Select allotted subject</option>
+      <option *ngFor="let assignment of assignments()" [value]="assignment.id">
+        {{ assignment.class_name }} - {{ assignment.section_name }} - {{ assignment.subject_name }} - {{ assignment.mapped_exam_configuration_name || 'Exam Not Mapped' }}
+      </option>
+    </select>
+    <input type="date" [ngModel]="date()" (ngModelChange)="date.set($event)" />
+    <button type="button" (click)="loadSheet()" [disabled]="loading()">{{ loading() ? 'Loading...' : 'Load' }}</button>
+    <button type="button" (click)="save()" [disabled]="saving() || loading()">{{ saving() ? 'Saving...' : 'Save Attendance' }}</button>
+  </div>
+
+  <div class="table" *ngIf="rows().length > 0">
+    <div class="table__row table__row--head">
+      <span>Roll #</span>
+      <span>Student</span>
+      <span>Status</span>
+      <span>Remarks</span>
+    </div>
+    <div class="table__row" *ngFor="let row of rows()">
+      <span>{{ row.roll_number || '-' }}</span>
+      <span>{{ row.student_name || '-' }}</span>
+      <span>
+        <select [ngModel]="row.status" (ngModelChange)="onStatusChange(row, $event)">
+          <option value="not_marked">Not Marked</option>
+          <option value="present">Present</option>
+          <option value="absent">Absent</option>
+          <option value="leave">Leave</option>
+          <option value="half_day">Half Day</option>
+        </select>
+      </span>
+      <span><input [ngModel]="row.remarks" (ngModelChange)="row.remarks = $event; rows.set([...rows()])" placeholder="Remarks" /></span>
+    </div>
+  </div>
+
+  <p *ngIf="!loading() && assignments().length === 0">No subject assignment found for your account.</p>
+</div>

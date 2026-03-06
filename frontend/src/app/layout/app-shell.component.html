@@ -1,0 +1,38 @@
+<div class="shell">
+  <aside class="shell__sidebar">
+    <div class="shell__brand">
+      <div class="shell__logo">SMS</div>
+      <div>
+        <h3>Welcome</h3>
+        <p>{{ user()?.full_name }}</p>
+      </div>
+    </div>
+
+    <nav class="shell__nav">
+      <a
+        *ngFor="let item of visibleItems()"
+        [routerLink]="item.route"
+        routerLinkActive="active"
+      >
+        {{ item.label }}
+      </a>
+    </nav>
+  </aside>
+
+  <div class="shell__main">
+    <header class="shell__header">
+      <div>
+        <h1>School Management System</h1>
+        <p>Role-based access aligned to SRS v1.3</p>
+      </div>
+      <div class="shell__actions">
+        <span class="shell__role">{{ user()?.role }}</span>
+        <button type="button" (click)="logout()">Logout</button>
+      </div>
+    </header>
+
+    <section class="shell__content">
+      <router-outlet />
+    </section>
+  </div>
+</div>

@@ -1,0 +1,126 @@
+<div class="admin-marks">
+  <div class="admin-marks__header">
+    <h2>Assign Marks</h2>
+    <p>Review teacher-wise submitted marks and publish compiled final marks.</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="message()">{{ message() }}</p>
+
+  <div class="form">
+    <select [ngModel]="classId()" (ngModelChange)="onClassChange($event)">
+      <option value="">Select class</option>
+      <option *ngFor="let item of classes()" [value]="item.id">{{ item.name }}</option>
+    </select>
+
+    <select [ngModel]="sectionId()" (ngModelChange)="onSectionChange($event)">
+      <option value="">Select section</option>
+      <option *ngFor="let item of sections()" [value]="item.id">{{ item.name }}</option>
+    </select>
+
+    <select [ngModel]="subjectId()" (ngModelChange)="subjectId.set($event)">
+      <option value="">Select subject</option>
+      <option *ngFor="let item of filteredSubjects()" [value]="item.id">
+        {{ item.name }} ({{ item.subject_code || item.code }})
+      </option>
+    </select>
+
+    <input
+      [ngModel]="subjectCode()"
+      (ngModelChange)="subjectCode.set($event)"
+      placeholder="Subject code (optional)"
+      maxlength="100"
+    />
+    <input type="date" [ngModel]="markedOn()" (ngModelChange)="markedOn.set($event)" />
+    <select [ngModel]="examConfigurationId()" (ngModelChange)="examConfigurationId.set($event)">
+      <option value="">Select configured exam</option>
+      <option *ngFor="let exam of examConfigurations()" [value]="exam.id">
+        {{ exam.sequence }}. {{ exam.name }}
+      </option>
+    </select>
+
+    <button type="button" (click)="loadSheet()" [disabled]="loading()">
+      {{ loading() ? 'Loading...' : 'Load' }}
+    </button>
+    <button type="button" class="btn-save" (click)="saveCompiled()" [disabled]="saving() || loading() || isFinalized()">
+      {{ saving() ? 'Saving...' : 'Save Compiled' }}
+    </button>
+    <button type="button" class="btn-finalize" (click)="finalize()" [disabled]="finalizing() || loading() || isFinalized()">
+      {{ finalizing() ? 'Finalizing...' : (isFinalized() ? 'Finalized' : 'Finalize') }}
+    </button>
+    <button
+      type="button"
+      class="btn-download"
+      *ngIf="canDownload()"
+      (click)="downloadExcel()"
+      [disabled]="downloadingExcel() || loading()"
+    >
+      {{ downloadingExcel() ? 'Preparing Excel...' : 'Download Excel' }}
+    </button>
+    <button
+      type="button"
+      class="btn-download"
+      *ngIf="canDownload()"
+      (click)="downloadPdf()"
+      [disabled]="downloadingPdf() || loading()"
+    >
+      {{ downloadingPdf() ? 'Preparing PDF...' : 'Download PDF' }}
+    </button>
+  </div>
+
+  <p class="scope" *ngIf="scope() as current">
+    <strong>{{ current.subject_name }}</strong> ({{ current.subject_code }}) |
+    Class <strong>{{ current.class_name }}</strong> |
+    Section <strong>{{ current.section_name }}</strong> |
+    Year <strong>{{ current.academic_year_name }}</strong>
+  </p>
+
+  <div class="table" *ngIf="rows().length > 0">
+    <div class="table__row table__row--head" [style.gridTemplateColumns]="'90px 1.4fr ' + 'repeat(' + teachers().length + ', 140px) 120px 120px 1.2fr'">
+      <span>Roll #</span>
+      <span>Student</span>
+      <span *ngFor="let teacher of teachers()">{{ teacher.name }}</span>
+      <span>Final Marks</span>
+      <span>Final Max</span>
+      <span>Remarks</span>
+    </div>
+
+    <div class="table__row" *ngFor="let row of rows()" [style.gridTemplateColumns]="'90px 1.4fr ' + 'repeat(' + teachers().length + ', 140px) 120px 120px 1.2fr'">
+      <span>{{ row.roll_number || '-' }}</span>
+      <span>{{ row.student_name || '-' }}</span>
+
+      <span class="teacher-mark" *ngFor="let teacher of teachers()">
+        {{ row.teacher_marks[teacher.id + '']?.marks_obtained ?? '-' }}
+      </span>
+
+      <span>
+        <input
+          type="number"
+          min="0"
+          [disabled]="isFinalized()"
+          [ngModel]="row.compiled_marks_obtained"
+          (ngModelChange)="onCompiledMarksChange(row, $event)"
+        />
+      </span>
+      <span>
+        <input
+          type="number"
+          min="1"
+          [disabled]="isFinalized()"
+          [ngModel]="row.compiled_max_marks"
+          (ngModelChange)="onCompiledMaxChange(row, $event)"
+        />
+      </span>
+      <span>
+        <input
+          [disabled]="isFinalized()"
+          [ngModel]="row.compiled_remarks"
+          (ngModelChange)="onCompiledRemarksChange(row, $event)"
+          placeholder="Remarks"
+        />
+      </span>
+    </div>
+  </div>
+
+  <p *ngIf="!loading() && rows().length === 0">No rows found for selected filters.</p>
+</div>

@@ -1,0 +1,239 @@
+<section class="expenses">
+  <div class="expenses__header">
+    <h2>Expenses</h2>
+    <p>Append-only expense register with reversal-based corrections.</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="message()">{{ message() }}</p>
+
+  <article class="card">
+    <h3>Filters</h3>
+    <form [formGroup]="filterForm" class="form">
+      <input formControlName="start_date" type="date" />
+      <input formControlName="end_date" type="date" />
+      <input formControlName="category" placeholder="Category" />
+      <select formControlName="payment_method">
+        <option value="">All payment methods</option>
+        <option value="cash">Cash</option>
+        <option value="cheque">Cheque</option>
+        <option value="online">Online</option>
+        <option value="card">Card</option>
+        <option value="upi">UPI</option>
+        <option value="bank_transfer">Bank Transfer</option>
+        <option value="other">Other</option>
+      </select>
+      <select formControlName="is_reversal">
+        <option value="">All entries</option>
+        <option value="false">Original only</option>
+        <option value="true">Reversals only</option>
+      </select>
+      <button type="button" (click)="loadExpenses()" [disabled]="loading()">
+        {{ loading() ? 'Loading...' : 'Apply Filters' }}
+      </button>
+    </form>
+  </article>
+
+  <article class="card" *ngIf="summary() as s">
+    <h3>Summary</h3>
+    <div class="kpi">
+      <div>
+        <span>Total Expense</span>
+        <strong>{{ s.total_expense }}</strong>
+      </div>
+      <div>
+        <span>Reversed Amount</span>
+        <strong>{{ s.reversed_amount }}</strong>
+      </div>
+      <div>
+        <span>Net Expense</span>
+        <strong>{{ s.net_expense }}</strong>
+      </div>
+    </div>
+  </article>
+
+  <article class="card" *ngIf="canEdit()">
+    <h3>Create Expense</h3>
+    <form [formGroup]="createForm" (ngSubmit)="createExpense()" class="form">
+      <input formControlName="expense_date" type="date" />
+      <input formControlName="category" placeholder="Category" />
+      <input formControlName="vendor_name" placeholder="Vendor name" />
+      <input formControlName="amount" type="number" step="0.01" placeholder="Amount" />
+      <select formControlName="payment_method">
+        <option value="cash">Cash</option>
+        <option value="cheque">Cheque</option>
+        <option value="online">Online</option>
+        <option value="card">Card</option>
+        <option value="upi">UPI</option>
+        <option value="bank_transfer">Bank Transfer</option>
+        <option value="other">Other</option>
+      </select>
+      <input formControlName="reference_number" placeholder="Reference number (optional)" />
+      <input class="full" formControlName="description" placeholder="Description (optional)" />
+      <div
+        class="dropzone full"
+        [class.dropzone--active]="createDropActive()"
+        (dragover)="onCreateDragOver($event)"
+        (dragleave)="onCreateDragLeave($event)"
+        (drop)="onCreateDrop($event)"
+      >
+        <p>Drag and drop receipt file here</p>
+        <p class="hint">Accepted: PDF, image, Excel, CSV, DOC, DOCX (max 10 MB)</p>
+        <input #createPicker type="file" hidden (change)="onCreateFilePicked($event)" accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,.csv,.doc,.docx" />
+        <button type="button" class="ghost" (click)="createPicker.click()">Choose File</button>
+        <p *ngIf="createReceiptFile() as file"><strong>Selected:</strong> {{ file.name }}</p>
+        <button type="button" class="danger" *ngIf="createReceiptFile()" (click)="clearCreateFile()">Clear File</button>
+      </div>
+      <button type="submit" [disabled]="loading()">
+        {{ loading() ? 'Saving...' : 'Save Expense' }}
+      </button>
+    </form>
+  </article>
+
+  <article class="card" *ngIf="canEdit()">
+    <h3>Reverse Expense</h3>
+    <form [formGroup]="reversalForm" (ngSubmit)="reverseExpense()" class="form">
+      <input formControlName="expense_id" type="number" placeholder="Expense ID" />
+      <input formControlName="reversal_date" type="date" />
+      <input class="full" formControlName="reversal_reason" placeholder="Reversal reason" />
+      <button type="submit" [disabled]="loading()">
+        {{ loading() ? 'Processing...' : 'Reverse Expense' }}
+      </button>
+    </form>
+  </article>
+
+  <article class="card" *ngIf="canUpload()">
+    <h3>Upload Receipt to Existing Expense</h3>
+    <form [formGroup]="receiptUploadForm" (ngSubmit)="uploadReceiptToExistingExpense()" class="form">
+      <input formControlName="expense_id" type="number" placeholder="Expense ID" />
+      <div
+        class="dropzone full"
+        [class.dropzone--active]="uploadDropActive()"
+        (dragover)="onUploadDragOver($event)"
+        (dragleave)="onUploadDragLeave($event)"
+        (drop)="onUploadDrop($event)"
+      >
+        <p>Move file here to upload (drag and drop)</p>
+        <input #uploadPicker type="file" hidden (change)="onUploadFilePicked($event)" accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,.csv,.doc,.docx" />
+        <button type="button" class="ghost" (click)="uploadPicker.click()">Choose File</button>
+        <p *ngIf="uploadReceiptFile() as file"><strong>Selected:</strong> {{ file.name }}</p>
+        <button type="button" class="danger" *ngIf="uploadReceiptFile()" (click)="clearUploadFile()">Clear File</button>
+      </div>
+      <button type="submit" [disabled]="loading()">
+        {{ loading() ? 'Uploading...' : 'Upload Receipt' }}
+      </button>
+      <p class="hint full">Receipt file is optional. You can submit without a file and upload later.</p>
+    </form>
+  </article>
+
+  <article class="card">
+    <h3>Generate Audit Report (Durable 20-30 Years)</h3>
+    <form [formGroup]="reportForm" class="form">
+      <input formControlName="start_date" type="date" />
+      <input formControlName="end_date" type="date" />
+      <select formControlName="group_by">
+        <option value="month">Group by Month</option>
+        <option value="year">Group by Year</option>
+        <option value="category">Group by Category</option>
+      </select>
+      <button type="button" (click)="generateAuditReport()" [disabled]="loading()">
+        {{ loading() ? 'Generating...' : 'Generate Report' }}
+      </button>
+      <button type="button" class="ghost" (click)="downloadExpenseEntries()" [disabled]="loading()">
+        {{ loading() ? 'Preparing...' : 'Download Expense Entries CSV' }}
+      </button>
+    </form>
+
+    <div class="kpi" *ngIf="auditReport() as report">
+      <div>
+        <span>Net Expense</span>
+        <strong>{{ report.summary.net_expense }}</strong>
+      </div>
+      <div>
+        <span>Receipt Coverage %</span>
+        <strong>{{ report.summary.receipt_coverage_percent }}</strong>
+      </div>
+      <div>
+        <span>Journal Unlinked</span>
+        <strong>{{ report.summary.journal_unlinked_count }}</strong>
+      </div>
+      <div>
+        <span>Report Fingerprint</span>
+        <strong>{{ report.report_fingerprint }}</strong>
+      </div>
+    </div>
+
+    <div class="table" *ngIf="auditReport()?.trend?.length">
+      <div class="table__row table__row--head table__row--four">
+        <span>Bucket</span>
+        <span>Total Expense</span>
+        <span>Total Reversed</span>
+        <span>Net</span>
+      </div>
+      <div class="table__row table__row--four" *ngFor="let row of auditReport()?.trend">
+        <span>{{ row.bucket }}</span>
+        <span>{{ row.total_expense }}</span>
+        <span>{{ row.total_reversed }}</span>
+        <span>{{ row.net_expense }}</span>
+      </div>
+    </div>
+
+    <div class="table" *ngIf="auditReport()?.audit_trail?.length">
+      <div class="table__row table__row--head table__row--five">
+        <span>ID</span>
+        <span>Action</span>
+        <span>Model</span>
+        <span>Reason</span>
+        <span>At</span>
+      </div>
+      <div class="table__row table__row--five" *ngFor="let log of auditReport()?.audit_trail">
+        <span>{{ log.id }}</span>
+        <span>{{ log.action }}</span>
+        <span>{{ log.model_type }} #{{ log.model_id }}</span>
+        <span>{{ log.reason || '-' }}</span>
+        <span>{{ log.created_at }}</span>
+      </div>
+    </div>
+  </article>
+
+  <article class="card">
+    <h3>Expense Entries</h3>
+    <div class="table" *ngIf="expenses().length; else noData">
+      <div class="table__row table__row--head">
+        <span>ID</span>
+        <span>Number</span>
+        <span>Date</span>
+        <span>Category</span>
+        <span>Amount</span>
+        <span>Method</span>
+        <span>Type</span>
+        <span>Receipts</span>
+      </div>
+      <div class="table__row" *ngFor="let item of expenses()">
+        <span>{{ item.id }}</span>
+        <span>{{ item.expense_number }}</span>
+        <span>{{ item.expense_date }}</span>
+        <span>{{ item.category }}</span>
+        <span>{{ item.amount }}</span>
+        <span>{{ item.payment_method }}</span>
+        <span>{{ item.is_reversal ? 'Reversal' : 'Original' }}</span>
+        <span class="receipts-cell">
+          <ng-container *ngIf="item.receipts?.length; else noReceipts">
+            <button
+              type="button"
+              class="ghost"
+              *ngFor="let receipt of item.receipts"
+              (click)="downloadReceipt(receipt.id, receipt.original_name)"
+            >
+              {{ receipt.original_name }}
+            </button>
+          </ng-container>
+          <ng-template #noReceipts>-</ng-template>
+        </span>
+      </div>
+    </div>
+    <ng-template #noData>
+      <p class="empty">No expense records found.</p>
+    </ng-template>
+  </article>
+</section>

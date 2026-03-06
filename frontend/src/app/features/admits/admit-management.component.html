@@ -1,0 +1,191 @@
+<section class="admit-management">
+  <header>
+    <h2>Admit Management</h2>
+    <p class="muted">Session-based admit generation and publishing.</p>
+  </header>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="ok" *ngIf="message()">{{ message() }}</p>
+
+  <div class="toolbar">
+    <label>
+      Class
+      <select [ngModel]="selectedClassId()" (ngModelChange)="onClassChange($event)">
+        <option value="">Select class</option>
+        <option *ngFor="let item of classOptions()" [value]="item.id">{{ item.name }}</option>
+      </select>
+    </label>
+    <label>
+      Academic Session
+      <select [ngModel]="selectedAcademicYearId()" (ngModelChange)="onAcademicYearChange($event)">
+        <option value="">Select academic session</option>
+        <option *ngFor="let item of academicYearOptions()" [value]="item.id">{{ item.name }}</option>
+      </select>
+    </label>
+    <label>
+      Exam Configuration
+      <select [ngModel]="selectedExamConfigId()" (ngModelChange)="onExamConfigChange($event)" [disabled]="!selectedAcademicYearId() || loadingExamConfigs()">
+        <option value="">Select exam configuration</option>
+        <option *ngFor="let item of examConfigOptions()" [value]="item.id">{{ item.name }}</option>
+      </select>
+    </label>
+    <label>
+      Session
+      <select [ngModel]="selectedSessionId()" (ngModelChange)="onSessionChange($event)" [disabled]="!canLoadSessions() || loading()">
+        <option [ngValue]="''">Select session</option>
+        <option *ngFor="let row of rows()" [ngValue]="row.id.toString()">{{ row.name }}</option>
+      </select>
+    </label>
+    <label>
+      Center Name
+      <input type="text" [ngModel]="centerName()" (ngModelChange)="centerName.set($event)" placeholder="Optional" />
+    </label>
+    <label>
+      Seat Prefix
+      <input type="text" [ngModel]="seatPrefix()" (ngModelChange)="seatPrefix.set($event)" placeholder="S" />
+    </label>
+    <button type="button" (click)="generate()" [disabled]="isActionLoading('generate')">
+      {{ isActionLoading('generate') ? 'Generating...' : 'Generate Draft Admits' }}
+    </button>
+    <button type="button" class="publish" (click)="publish()" [disabled]="isActionLoading('publish')">
+      {{ isActionLoading('publish') ? 'Publishing...' : 'Publish Session Admits' }}
+    </button>
+    <button type="button" class="bulk" (click)="downloadBulk()" [disabled]="!selectedSessionId() || bulkLoading()">
+      {{ bulkLoading() ? 'Preparing...' : 'Download Bulk PDF' }}
+    </button>
+    <button type="button" class="light" (click)="refresh()" [disabled]="loading() || loadingFilters()">Refresh</button>
+  </div>
+
+  <div class="table-wrap timetable-wrap">
+    <h3>Exam Timetable</h3>
+    <p class="muted" *ngIf="!canLoadSessions()">Select class, academic session, and exam configuration first.</p>
+    <p class="muted" *ngIf="loadingSubjects()">Loading subjects...</p>
+    <p class="muted" *ngIf="canLoadSessions() && selectedSessionId() && !loadingSubjects() && scheduleSubjects().length === 0">
+      No subjects mapped for selected class and academic year.
+    </p>
+    <table *ngIf="canLoadSessions() && selectedSessionId() && !loadingSubjects() && scheduleSubjects().length > 0">
+      <thead>
+        <tr>
+          <th>Subject</th>
+          <th>Code</th>
+          <th>Exam Date</th>
+          <th>Shift</th>
+          <th>Start Time</th>
+          <th>End Time</th>
+          <th>Room</th>
+          <th>Max Marks</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let row of scheduleSubjects(); let i = index">
+          <td>{{ row.subject_name }}</td>
+          <td>{{ row.subject_code || '-' }}</td>
+          <td>
+            <input type="date" [ngModel]="row.exam_date" (ngModelChange)="updateScheduleField(i, 'exam_date', $event)" />
+          </td>
+          <td>
+            <select [ngModel]="row.exam_shift" (ngModelChange)="updateScheduleField(i, 'exam_shift', $event)">
+              <option value="">Select shift</option>
+              <option value="1st Shift">1st Shift</option>
+              <option value="2nd Shift">2nd Shift</option>
+            </select>
+          </td>
+          <td>
+            <input type="time" [ngModel]="row.start_time" (ngModelChange)="updateScheduleField(i, 'start_time', $event)" />
+          </td>
+          <td>
+            <input type="time" [ngModel]="row.end_time" (ngModelChange)="updateScheduleField(i, 'end_time', $event)" />
+          </td>
+          <td>
+            <input type="text" [ngModel]="row.room_number" (ngModelChange)="updateScheduleField(i, 'room_number', $event)" placeholder="Optional" />
+          </td>
+          <td>
+            <input type="number" min="1" max="1000" [ngModel]="row.max_marks" (ngModelChange)="updateScheduleField(i, 'max_marks', $event)" placeholder="Optional" />
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="table-wrap">
+    <p class="muted" *ngIf="loadingFilters()">Loading classes and academic sessions...</p>
+    <p class="muted" *ngIf="loadingExamConfigs()">Loading exam configurations...</p>
+    <p class="muted" *ngIf="!canLoadSessions() && !loadingFilters()">Please select class, academic session, and exam configuration to view sessions.</p>
+    <p class="muted" *ngIf="loading()">Loading sessions...</p>
+    <table *ngIf="canLoadSessions() && !loading()">
+      <thead>
+        <tr>
+          <th>Session</th>
+          <th>Status</th>
+          <th>Class</th>
+          <th>Academic Year</th>
+          <th>Exam Config</th>
+          <th>Active Admit</th>
+          <th>Published Admit</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let row of rows()">
+          <td>{{ row.name }}</td>
+          <td>{{ row.status }}</td>
+          <td>{{ row.class_model?.name || row.class_id }}</td>
+          <td>{{ row.academic_year?.name || row.academic_year_id }}</td>
+          <td>{{ row.exam_configuration?.name || row.exam_configuration_id || '-' }}</td>
+          <td>{{ row.active_admit_count }}</td>
+          <td>{{ row.published_admit_count }}</td>
+          <td>
+            <button type="button" class="light" (click)="onSessionChange(row.id.toString())" [disabled]="selectedSessionId() === row.id.toString()">
+              {{ selectedSessionId() === row.id.toString() ? 'Selected' : 'Use Session' }}
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="table-wrap">
+    <div class="section-head">
+      <h3>Session Admit Cards</h3>
+      <input type="search" class="search" [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)" placeholder="Search student name / roll / seat" />
+    </div>
+    <p class="muted" *ngIf="selectedSessionId() && loadingSessionCards()">Loading admit cards...</p>
+    <p class="muted" *ngIf="selectedSessionId() && !loadingSessionCards() && filteredSessionCards().length === 0">No admit cards found for this session.</p>
+    <table *ngIf="selectedSessionId() && !loadingSessionCards() && filteredSessionCards().length > 0">
+      <thead>
+        <tr>
+          <th>Student</th>
+          <th>Roll No</th>
+          <th>Seat No</th>
+          <th>Status</th>
+          <th>Visibility</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let card of filteredSessionCards()">
+          <td>{{ card.student_name || '-' }}</td>
+          <td>{{ card.roll_number || '-' }}</td>
+          <td>{{ card.seat_number || '-' }}</td>
+          <td>{{ card.status }}</td>
+          <td>
+            <span class="badge" [class.badge--ok]="card.visibility_status === 'visible'">
+              {{ card.visibility_status || 'visible' }}
+            </span>
+          </td>
+          <td class="actions">
+            <button type="button" class="light" (click)="setVisibility(card, 'withheld')" [disabled]="isVisibilityLoading(card.id) || card.visibility_status === 'withheld'">
+              {{ isVisibilityLoading(card.id) ? 'Working...' : 'Hide' }}
+            </button>
+            <button type="button" class="publish" (click)="setVisibility(card, 'visible')" [disabled]="isVisibilityLoading(card.id) || card.visibility_status === 'visible'">
+              {{ isVisibilityLoading(card.id) ? 'Working...' : 'Show' }}
+            </button>
+            <button type="button" class="bulk" (click)="downloadCard(card)" [disabled]="isVisibilityLoading(card.id)">
+              {{ isVisibilityLoading(card.id) ? 'Working...' : 'Download' }}
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>

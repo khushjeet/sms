@@ -1,0 +1,128 @@
+<section class="student-section">
+  <header>
+    <h2>{{ title() }}</h2>
+    <p class="muted">Live data from student dashboard API</p>
+  </header>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="muted" *ngIf="loading()">Loading...</p>
+
+  <ng-container *ngIf="vm() as data">
+    <p class="muted" *ngIf="!hasPermission()">This section is not enabled for your account.</p>
+
+    <div class="panel admit-card-panel" *ngIf="section() === 'admit-card' && hasPermission()">
+      <div class="admit-header">
+        <div>
+          <h3>Admit Card</h3>
+          <p class="muted">Your latest admit card status</p>
+        </div>
+        <span class="status-pill" [class.status-pill--blocked]="isAdmitHidden()">
+          {{ admitStatusLabel() }}
+        </span>
+      </div>
+      <p *ngIf="admitLoading()" class="muted">Loading admit status...</p>
+      <div class="meta-grid">
+        <div><span>Exam</span>{{ admitExamName() }}</div>
+        <div><span>Published</span>{{ admitPublishedAt() }}</div>
+      </div>
+      <div class="notice" [class.notice--warn]="isAdmitHidden()">
+        <span>Message</span>
+        <strong>{{ admitMessage() }}</strong>
+      </div>
+      <button type="button" class="action-btn" (click)="printAdmitCard()" [disabled]="!canDownloadAdmit() || admitActionLoading()">
+        {{ admitActionLoading() ? 'Loading...' : 'Download / Print Admit' }}
+      </button>
+    </div>
+
+    <div class="panel" *ngIf="section() === 'fee' && hasPermission()">
+      <p><span>Total Fee:</span> {{ data.fee_summary.total_fee | number : '1.0-2' }}</p>
+      <p><span>Paid:</span> {{ data.fee_summary.paid_amount | number : '1.0-2' }}</p>
+      <p><span>Pending:</span> {{ data.fee_summary.pending_amount | number : '1.0-2' }}</p>
+      <p><span>Last Payment:</span> {{ data.fee_summary.last_payment_date || '-' }}</p>
+    </div>
+
+    <div class="panel" *ngIf="section() === 'result' && hasPermission()">
+      <p *ngIf="data.result_section.state !== 'available'">{{ data.result_section.message }}</p>
+      <ng-container *ngIf="data.result_section.state === 'available' && data.result_section.latest_result as result">
+        <p><span>Exam:</span> {{ result.exam_name || '-' }}</p>
+        <p><span>Grade:</span> {{ result.grade || '-' }}</p>
+        <p><span>Percentage:</span> {{ result.percentage | number : '1.0-2' }}</p>
+        <p><span>Published:</span> {{ result.published_at || '-' }}</p>
+      </ng-container>
+    </div>
+
+    <div class="panel table-wrap" *ngIf="section() === 'timetable' && hasPermission()">
+      <p class="muted" *ngIf="data.timetable.items.length === 0">No timetable data available.</p>
+      <table *ngIf="data.timetable.items.length > 0">
+        <thead>
+          <tr>
+            <th>Day</th>
+            <th>Period</th>
+            <th>Time</th>
+            <th>Subject</th>
+            <th>Teacher</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of data.timetable.items">
+            <td>{{ row.day }}</td>
+            <td>{{ row.period }}</td>
+            <td>{{ row.time }}</td>
+            <td>{{ row.subject }}</td>
+            <td>{{ row.teacher }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel table-wrap" *ngIf="section() === 'academic-history' && hasPermission()">
+      <p class="muted" *ngIf="data.academic_history.items.length === 0">No academic history found.</p>
+      <table *ngIf="data.academic_history.items.length > 0">
+        <thead>
+          <tr>
+            <th>Year</th>
+            <th>Class</th>
+            <th>Section</th>
+            <th>Roll No</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of data.academic_history.items">
+            <td>{{ row.academic_year || '-' }}</td>
+            <td>{{ row.class || '-' }}</td>
+            <td>{{ row.section || '-' }}</td>
+            <td>{{ row.roll_number || '-' }}</td>
+            <td>{{ row.status }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel table-wrap" *ngIf="section() === 'attendance-history' && hasPermission()">
+      <p class="muted" *ngIf="data.attendance_history.items.length === 0">No attendance history found.</p>
+      <table *ngIf="data.attendance_history.items.length > 0">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th>Present</th>
+            <th>Absent</th>
+            <th>Leave</th>
+            <th>Half Day</th>
+            <th>%</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of data.attendance_history.items">
+            <td>{{ row.month }}</td>
+            <td>{{ row.present }}</td>
+            <td>{{ row.absent }}</td>
+            <td>{{ row.leave }}</td>
+            <td>{{ row.half_day }}</td>
+            <td>{{ row.attendance_percentage | number : '1.0-2' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </ng-container>
+</section>

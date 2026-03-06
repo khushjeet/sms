@@ -1,0 +1,38 @@
+<div class="form" *ngIf="!loading(); else loadingTpl">
+  <div class="form__header">
+    <h2>{{ isEdit() ? 'Edit Class' : 'New Class' }}</h2>
+    <p>Classes define the academic sequence and fee structure dependencies.</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" class="form__grid">
+    <label>
+      <span>Name *</span>
+      <input formControlName="name" />
+    </label>
+    <label>
+      <span>Numeric Order *</span>
+      <input formControlName="numeric_order" type="number" />
+    </label>
+    <label>
+      <span>Status</span>
+      <select formControlName="status">
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
+    </label>
+    <label class="span-2">
+      <span>Description</span>
+      <textarea formControlName="description" rows="3"></textarea>
+    </label>
+
+    <div class="span-2">
+      <button type="submit">{{ isEdit() ? 'Save Changes' : 'Create Class' }}</button>
+    </div>
+  </form>
+</div>
+
+<ng-template #loadingTpl>
+  <p>Loading...</p>
+</ng-template>

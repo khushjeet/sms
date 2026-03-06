@@ -1,0 +1,96 @@
+.assignments {
+  display: grid;
+  gap: 1rem;
+}
+
+.assignments__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1rem;
+  background: #fff;
+}
+
+.mapping-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.mapping-form label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+
+select,
+button {
+  min-height: 2.35rem;
+}
+
+.teacher-multi select {
+  min-height: 8rem;
+}
+
+.table {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.table__row {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 1fr 0.75fr;
+  gap: 0.75rem;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+}
+
+.table__row--head {
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+.primary {
+  background: #0f766e;
+  color: #fff;
+  border: 1px solid #0f766e;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+}
+
+.secondary,
+.danger {
+  border-radius: 8px;
+  padding: 0.4rem 0.65rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.secondary {
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  background: #fff;
+}
+
+.danger {
+  border: 1px solid #ef4444;
+  color: #991b1b;
+  background: #fff5f5;
+}
+
+.error {
+  color: #b91c1c;
+}
+
+.success {
+  color: #047857;
+}
+

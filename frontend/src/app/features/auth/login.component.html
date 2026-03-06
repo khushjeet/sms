@@ -1,0 +1,38 @@
+<div class="login">
+  <div class="login__panel">
+    <div class="login__header">
+      <p class="login__eyebrow">School Management System</p>
+      <h1>Sign in</h1>
+      <p class="login__sub">Use your authorized account to access SMS modules.</p>
+    </div>
+
+    <form [formGroup]="form" (ngSubmit)="submit()" class="login__form">
+      <label>
+        <span>Email</span>
+        <input type="email" formControlName="email" placeholder="you@school.com" />
+      </label>
+      <label>
+        <span>Password</span>
+        <input type="password" formControlName="password" placeholder="••••••••" />
+      </label>
+
+      <p class="login__error" *ngIf="error()">{{ error() }}</p>
+
+      <button type="submit" [disabled]="loading()">
+        {{ loading() ? 'Signing in...' : 'Sign in' }}
+      </button>
+    </form>
+  </div>
+
+  <div class="login__aside">
+    <div>
+      <h2>Secure access, role-based control.</h2>
+      <p>Authentication is aligned with SRS v1.3 Section 12 for auditability and access control.</p>
+      <ul>
+        <li>Token-based auth (Sanctum)</li>
+        <li>Role-aware navigation</li>
+        <li>Immutable audit logging</li>
+      </ul>
+    </div>
+  </div>
+</div>

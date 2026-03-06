@@ -1,0 +1,137 @@
+<div class="detail" *ngIf="!loading(); else loadingTpl">
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="message()">{{ message() }}</p>
+
+  <div *ngIf="employee() as e">
+    <div class="detail__header">
+      <div>
+        <h2>{{ fullName(e) }}</h2>
+        <p>{{ e.designation }} | Employee #{{ e.employee_id }}</p>
+      </div>
+      <div class="detail__actions">
+        <a class="primary" [routerLink]="['/employees', e.id, 'edit']">Edit</a>
+        <button class="danger" type="button" (click)="deleteEmployee()">Archive</button>
+      </div>
+    </div>
+
+    <div class="detail__grid">
+      <div class="card">
+        <h3>Profile</h3>
+        <p><strong>Email:</strong> {{ e.user?.email }}</p>
+        <p><strong>Phone:</strong> {{ e.user?.phone || '-' }}</p>
+        <p><strong>Role:</strong> {{ e.user?.role || '-' }}</p>
+        <p><strong>Status:</strong> {{ e.status }}</p>
+        <p><strong>PAN Card:</strong> {{ e.pan_number || '-' }}</p>
+      </div>
+      <div class="card">
+        <h3>Employment</h3>
+        <p><strong>Type:</strong> {{ e.employee_type }}</p>
+        <p><strong>Joining Date:</strong> {{ e.joining_date }}</p>
+        <p><strong>Department:</strong> {{ e.department || '-' }}</p>
+        <p><strong>Qualification:</strong> {{ e.qualification || '-' }}</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Documents</h3>
+      <p *ngIf="!e.documents?.length">No documents uploaded yet.</p>
+      <div class="doc-row" *ngFor="let doc of e.documents">
+        <span>{{ doc.original_name }} ({{ doc.document_type }})</span>
+        <button
+          type="button"
+          class="link-btn"
+          [disabled]="downloadingDocumentId() === doc.id"
+          (click)="downloadDocument(doc)"
+        >
+          {{ downloadingDocumentId() === doc.id ? 'Preparing...' : 'Download' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card__title">
+        <h3>Attendance History (Durable Record)</h3>
+        <div class="row-actions">
+          <button type="button" class="link-btn" (click)="downloadAttendancePdf()">Download PDF</button>
+          <button type="button" class="link-btn" (click)="downloadAttendanceExcel()">Download Excel</button>
+        </div>
+      </div>
+      <form class="filter-row" [formGroup]="attendanceFilterForm">
+        <input type="date" formControlName="start_date" />
+        <input type="date" formControlName="end_date" />
+        <select formControlName="status">
+          <option value="">All statuses</option>
+          <option value="present">Present</option>
+          <option value="absent">Absent</option>
+          <option value="half_day">Half Day</option>
+          <option value="leave">Leave</option>
+        </select>
+        <button type="button" class="primary-btn" (click)="loadAttendanceHistory()">
+          {{ loadingAttendance() ? 'Loading...' : 'Load Attendance' }}
+        </button>
+      </form>
+
+      <div class="history-table" *ngIf="attendanceRows().length; else noAttendance">
+        <div class="history-table__row history-table__head history-table__attendance">
+          <span>Date</span><span>Status</span><span>Late</span><span>Remarks</span><span>Override</span>
+        </div>
+        <div class="history-table__row history-table__attendance" *ngFor="let row of attendanceRows()">
+          <span>{{ row.attendance_date }}</span>
+          <span>{{ row.status }}</span>
+          <span>{{ row.late_minutes ?? '-' }}</span>
+          <span>{{ row.remarks || '-' }}</span>
+          <span>{{ row.override_reason || '-' }}</span>
+        </div>
+      </div>
+      <ng-template #noAttendance>
+        <p class="empty">No attendance records found for selected filters.</p>
+      </ng-template>
+    </div>
+
+    <div class="card">
+      <div class="card__title">
+        <h3>Payout / Personal Finance History</h3>
+        <div class="row-actions">
+          <button type="button" class="link-btn" (click)="downloadPayoutPdf()">Download PDF</button>
+          <button type="button" class="link-btn" (click)="downloadPayoutExcel()">Download Excel</button>
+        </div>
+      </div>
+      <form class="filter-row" [formGroup]="payoutFilterForm">
+        <input type="number" formControlName="year" placeholder="Year" />
+        <input type="number" formControlName="month" placeholder="Month" />
+        <select formControlName="status">
+          <option value="">All statuses</option>
+          <option value="generated">Generated</option>
+          <option value="finalized">Finalized</option>
+          <option value="paid">Paid</option>
+        </select>
+        <button type="button" class="primary-btn" (click)="loadPayoutHistory()">
+          {{ loadingPayouts() ? 'Loading...' : 'Load Payouts' }}
+        </button>
+      </form>
+
+      <div class="history-table" *ngIf="payoutRows().length; else noPayout">
+        <div class="history-table__row history-table__head history-table__payout">
+          <span>Period</span><span>Status</span><span>Gross</span><span>Deductions</span><span>Net</span><span>Adjust</span><span>Final Net</span><span>Paid At</span>
+        </div>
+        <div class="history-table__row history-table__payout" *ngFor="let row of payoutRows()">
+          <span>{{ row.year }}-{{ row.month }}</span>
+          <span>{{ row.status }}</span>
+          <span>{{ row.gross_pay }}</span>
+          <span>{{ row.total_deductions }}</span>
+          <span>{{ row.net_pay }}</span>
+          <span>{{ row.adjustment_total }}</span>
+          <span>{{ row.net_after_adjustment }}</span>
+          <span>{{ row.paid_at || '-' }}</span>
+        </div>
+      </div>
+      <ng-template #noPayout>
+        <p class="empty">No payout records found for selected filters.</p>
+      </ng-template>
+    </div>
+  </div>
+</div>
+
+<ng-template #loadingTpl>
+  <p>Loading employee...</p>
+</ng-template>

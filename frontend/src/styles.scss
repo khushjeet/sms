@@ -1,0 +1,33 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap');
+
+:root {
+  --font-sans: 'Space Grotesk', sans-serif;
+  --font-serif: 'Libre Baskerville', serif;
+  --color-ink: #0f172a;
+  --color-muted: #475569;
+  --color-surface: #ffffff;
+  --color-accent: #16a34a;
+  --color-warm: #f8fafc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-warm);
+}
+
+h1, h2, h3 {
+  font-family: var(--font-serif);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}

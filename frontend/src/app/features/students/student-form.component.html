@@ -1,0 +1,254 @@
+<div class="form" *ngIf="!loading(); else loadingTpl">
+  <div class="form__header">
+    <h2>{{ isEdit() ? 'Edit Student' : 'Add Student' }}</h2>
+    <p>Student identity is permanent; enrollment is managed separately.</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <form [formGroup]="form" (ngSubmit)="submit()">
+    <fieldset class="section form__grid">
+      <legend>Personal Information</legend>
+
+      <label *ngIf="!isEdit()">
+        <span>Academic Year</span>
+        <select formControlName="academic_year_id">
+          <option value="">Select Year</option>
+          <option *ngFor="let year of academicYears()" [value]="year.id">{{ year.name }}</option>
+        </select>
+      </label>
+      <label *ngIf="!isEdit()">
+        <span>Admission Number *</span>
+        <input formControlName="admission_number" />
+      </label>
+      <label *ngIf="!isEdit()">
+        <span>Admission Date *</span>
+        <input formControlName="admission_date" type="date" />
+      </label>
+      <label *ngIf="!isEdit()">
+        <span>Roll Number</span>
+        <input formControlName="roll_number" />
+      </label>
+
+      <label>
+        <span>First Name *</span>
+        <input formControlName="first_name" />
+      </label>
+      <label>
+        <span>Last Name *</span>
+        <input formControlName="last_name" />
+      </label>
+      <label *ngIf="!isEdit()">
+        <span>Class</span>
+        <select formControlName="class_id">
+          <option value="">Select Class</option>
+          <option *ngFor="let classItem of classes()" [value]="classItem.id">{{ classItem.name }}</option>
+        </select>
+      </label>
+      <label *ngIf="!isEdit()">
+        <span>Religion</span>
+        <input formControlName="religion" />
+      </label>
+
+      <label *ngIf="!isEdit()">
+        <span>Category</span>
+        <input formControlName="category" />
+      </label>
+      <label>
+        <span>Primary Contact Number</span>
+        <input formControlName="phone" />
+      </label>
+      <label *ngIf="!isEdit()">
+        <span>Caste</span>
+        <input formControlName="caste" />
+      </label>
+      <label *ngIf="!isEdit()">
+        <span>Aadhar Number</span>
+        <input formControlName="aadhar_number" />
+      </label>
+
+      <label>
+        <span>Profile Image</span>
+        <input type="file" accept="image/*" (change)="onImageSelected($event)" />
+        <small *ngIf="selectedImageName()">Selected: {{ selectedImageName() }}</small>
+      </label>
+      <label *ngIf="!isEdit()">
+        <span>Date of Birth *</span>
+        <input formControlName="date_of_birth" type="date" />
+      </label>
+      <label *ngIf="!isEdit()">
+        <span>Gender *</span>
+        <select formControlName="gender">
+          <option value="">Select</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label>
+        <span>Blood Group</span>
+        <input formControlName="blood_group" placeholder="Select" />
+      </label>
+
+      <label>
+        <span>Email *</span>
+        <input formControlName="email" type="email" />
+      </label>
+      <label *ngIf="!isEdit()">
+        <span>Password</span>
+        <div class="password-field">
+          <input
+            formControlName="password"
+            [type]="showCreatePassword() ? 'text' : 'password'"
+            autocomplete="new-password"
+          />
+          <button type="button" class="secondary" (click)="showCreatePassword.set(!showCreatePassword())">
+            {{ showCreatePassword() ? 'Hide' : 'Show' }}
+          </button>
+        </div>
+      </label>
+      <label *ngIf="isEdit()">
+        <span>New Password</span>
+        <div class="password-field">
+          <input
+            formControlName="edit_password"
+            [type]="showEditPassword() ? 'text' : 'password'"
+            autocomplete="new-password"
+            placeholder="Leave blank to keep existing"
+          />
+          <button type="button" class="secondary" (click)="showEditPassword.set(!showEditPassword())">
+            {{ showEditPassword() ? 'Hide' : 'Show' }}
+          </button>
+        </div>
+      </label>
+      <label *ngIf="isEdit()">
+        <span>Confirm New Password</span>
+        <div class="password-field">
+          <input
+            formControlName="edit_password_confirmation"
+            [type]="showEditPasswordConfirmation() ? 'text' : 'password'"
+            autocomplete="new-password"
+          />
+          <button
+            type="button"
+            class="secondary"
+            (click)="showEditPasswordConfirmation.set(!showEditPasswordConfirmation())"
+          >
+            {{ showEditPasswordConfirmation() ? 'Hide' : 'Show' }}
+          </button>
+        </div>
+      </label>
+      <label *ngIf="!isEdit()">
+        <span>Nationality</span>
+        <input formControlName="nationality" />
+      </label>
+    </fieldset>
+
+    <fieldset class="section form__grid">
+      <legend>Parents & Guardian Information</legend>
+
+      <label>
+        <span>Father Name</span>
+        <input formControlName="father_name" />
+      </label>
+      <label>
+        <span>Email</span>
+        <input formControlName="father_email" type="email" />
+      </label>
+      <label>
+        <span>Father Mobile Number</span>
+        <input formControlName="father_mobile_number" />
+      </label>
+      <label>
+        <span>Father Occupation</span>
+        <input formControlName="father_occupation" />
+      </label>
+
+      <label>
+        <span>Mother Name</span>
+        <input formControlName="mother_name" />
+      </label>
+      <label>
+        <span>Mother Email</span>
+        <input formControlName="mother_email" type="email" />
+      </label>
+      <label>
+        <span>Mother Mobile Number</span>
+        <input formControlName="mother_mobile_number" />
+      </label>
+      <label>
+        <span>Mother Occupation</span>
+        <input formControlName="mother_occupation" />
+      </label>
+
+      <label>
+        <span>Bank Account Number</span>
+        <input formControlName="bank_account_number" />
+      </label>
+      <label>
+        <span>Bank Account Holder Name</span>
+        <input formControlName="bank_account_holder" />
+      </label>
+      <label>
+        <span>IFSC Code</span>
+        <input formControlName="ifsc_code" />
+      </label>
+      <label>
+        <span>Relation With Account Holder</span>
+        <input formControlName="relation_with_account_holder" />
+      </label>
+    </fieldset>
+
+    <fieldset class="section form__grid">
+      <legend>Address</legend>
+
+      <label class="span-2">
+        <span>Permanent Address</span>
+        <input formControlName="permanent_address" />
+      </label>
+      <label class="span-2">
+        <span>Current Address</span>
+        <input formControlName="current_address" />
+      </label>
+      <label>
+        <span>City</span>
+        <input formControlName="city" />
+      </label>
+      <label>
+        <span>State</span>
+        <input formControlName="state" />
+      </label>
+      <label>
+        <span>Pincode</span>
+        <input formControlName="pincode" />
+      </label>
+      <label>
+        <span>Address</span>
+        <input formControlName="address" />
+      </label>
+    </fieldset>
+
+    <fieldset class="section form__grid">
+      <legend>Additional Information</legend>
+
+      <label class="span-4">
+        <span>Medical Info (JSON)</span>
+        <textarea formControlName="medical_info" rows="4"></textarea>
+      </label>
+      <label class="span-4" *ngIf="isEdit()">
+        <span>Remarks</span>
+        <textarea formControlName="remarks" rows="3"></textarea>
+      </label>
+    </fieldset>
+
+    <div class="actions">
+      <button type="submit" [disabled]="submitting()">
+        {{ submitting() ? 'Submitting...' : (isEdit() ? 'Save Changes' : 'Submit') }}
+      </button>
+    </div>
+  </form>
+</div>
+
+<ng-template #loadingTpl>
+  <p>Loading...</p>
+</ng-template>

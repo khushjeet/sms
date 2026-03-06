@@ -1,0 +1,1005 @@
+<section class="finance">
+  <header class="finance__hero">
+    <div>
+      <p class="finance__eyebrow">Fee & Finance Operations</p>
+      <h2>Append-Only Ledger Finance</h2>
+      <p class="finance__subtext">
+        Fees never rewrite academics. Financial actions are immutable and auditable.
+      </p>
+    </div>
+    <div class="finance__law">
+      <span>CORE LAW</span>
+      <strong>Fees never rewrite academics.</strong>
+      <p>Academic progression never mutates from finance.</p>
+    </div>
+
+    <!-- Toast message START (click: clearMessage) -->
+    <div class="finance__toast" *ngIf="message() as msg" [ngClass]="'finance__toast--' + msg.type">
+      <span>{{ msg.text }}</span>
+      <button type="button" (click)="clearMessage()">✕</button>
+    </div>
+    <!-- Toast message END -->
+
+  </header>
+
+
+
+
+  <section class="panel panel--wide">
+    <div class="panel__header">
+      <h3>Student Finance Context</h3>
+      <span class="badge" *ngIf="selectedStudent()">Linked</span>
+    </div>
+
+    <!-- Student search START (ngSubmit: searchStudents) -->
+    <form [formGroup]="studentSearchForm" (ngSubmit)="searchStudents()" class="form">
+      <input formControlName="search" placeholder="Search by name, email, admission number, or enrollment ID" />
+      <button type="submit">Search students</button>
+    </form>
+    <!-- Student search END -->
+
+    <!-- Student selection START (ngSubmit: selectStudent) -->
+    <form [formGroup]="studentSelectForm" (ngSubmit)="selectStudent()" class="form">
+      <select formControlName="student_id">
+        <option value="">Select student</option>
+        <option *ngFor="let student of students()" [value]="student.id">
+          {{ student.user.first_name }} {{ student.user.last_name }} (Adm: {{ student.admission_number }}, Enr:
+          {{ student.currentEnrollment?.id || 'N/A' }})
+        </option>
+      </select>
+      <button type="submit">Use this student</button>
+    </form>
+    <!-- Student selection END -->
+
+    <p class="table__empty" *ngIf="studentSearching()">Searching students...</p>
+
+    <div class="finance__student-pin" *ngIf="selectedStudent() as student">
+      <div class="finance__student-pin-item">
+        <span class="finance__student-pin-label">Name</span>
+        <strong>{{ student.user.first_name }} {{ student.user.last_name }}</strong>
+      </div>
+      <div class="finance__student-pin-item">
+        <span class="finance__student-pin-label">Email</span>
+        <strong>{{ student.user.email || '-' }}</strong>
+      </div>
+      <div class="finance__student-pin-item">
+        <span class="finance__student-pin-label">Admission No.</span>
+        <strong>{{ student.admission_number }}</strong>
+      </div>
+      <div class="finance__student-pin-item">
+        <span class="finance__student-pin-label">Enrollment ID</span>
+        <strong>{{ student.currentEnrollment?.id || 'N/A' }}</strong>
+      </div>
+      <div class="finance__student-pin-item">
+        <span class="finance__student-pin-label">Class / Section</span>
+        <strong>
+          {{ student.currentEnrollment?.section?.class?.name || '-' }}
+          {{ student.currentEnrollment?.section?.name || '' }}
+        </strong>
+      </div>
+      <div class="finance__student-pin-item">
+        <span class="finance__student-pin-label">Status</span>
+        <strong>{{ student.currentEnrollment?.status || student.status || '-' }}</strong>
+      </div>
+    </div>
+
+    <div class="finance__kpis" *ngIf="selectedStudentSummary() as summary">
+      <div class="kpi">
+        <span>Total Fees</span>
+        <strong>{{ summary.total_fees }}</strong>
+      </div>
+      <div class="kpi">
+        <span>Total Paid</span>
+        <strong>{{ summary.total_paid }}</strong>
+      </div>
+      <div class="kpi">
+        <span>Pending Dues</span>
+        <strong>{{ summary.pending_dues }}</strong>
+      </div>
+      <div class="kpi">
+        <span>Current Enrollment</span>
+        <strong>{{ selectedEnrollmentId() || 'N/A' }}</strong>
+      </div>
+    </div>
+  </section>
+
+  <!-- Finance tabs START (click: setTab) -->
+  <nav class="finance__tabs">
+    <button type="button" [class.active]="activeTab() === 'overview'" (click)="setTab('overview')">
+      Overview
+    </button>
+    <button type="button" [class.active]="activeTab() === 'ledger'" (click)="setTab('ledger')">
+      Ledger
+    </button>
+    <button type="button" [class.active]="activeTab() === 'payments'" (click)="setTab('payments')">
+      Payments
+    </button>
+    <button type="button" [class.active]="activeTab() === 'receipts'" (click)="setTab('receipts')">
+      Receipts
+    </button>
+    <button type="button" [class.active]="activeTab() === 'holds'" (click)="setTab('holds')">
+      Holds
+    </button>
+    <button type="button" [class.active]="activeTab() === 'reports'" (click)="setTab('reports')">
+      Reports
+    </button>
+    <button type="button" [class.active]="activeTab() === 'transport'" (click)="setTab('transport')">
+      Transport
+    </button>
+  </nav>
+  <!-- Finance tabs END -->
+
+
+  <section *ngIf="activeTab() === 'overview'" class="finance__grid">
+    <article class="panel">
+      <h3>Fee Heads</h3>
+      <!-- Fee head create START (ngSubmit: createFeeHead) -->
+      <form [formGroup]="feeHeadForm" (ngSubmit)="createFeeHead()" class="form">
+        <input formControlName="name" placeholder="Fee head name" />
+        <input formControlName="code" placeholder="Code (optional)" />
+        <input formControlName="description" placeholder="Description" />
+        <select formControlName="status">
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+        <button type="submit" [disabled]="isBusy('createFeeHead')">
+          {{ isBusy('createFeeHead') ? 'Creating...' : 'Create fee head' }}
+        </button>
+      </form>
+      <!-- Fee head create END -->
+      <div class="panel__scroll panel__scroll--both">
+        <div class="table table--four table--fee-heads">
+          <div class="table__row table__head">
+            <span>ID</span>
+            <span>Name</span>
+            <span>Code</span>
+            <span>Status</span>
+          </div>
+          <div class="table__row" *ngFor="let head of feeHeads()">
+            <span>{{ head.id }}</span>
+            <span class="table__wrap">{{ head.name }}</span>
+            <span>{{ head.code || '-' }}</span>
+            <span>{{ head.status }}</span>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="panel">
+      <h3>Installment Builder</h3>
+      <!-- Installment create START (ngSubmit: createInstallment) -->
+      <form [formGroup]="installmentForm" (ngSubmit)="createInstallment()" class="form">
+        <select formControlName="fee_head_id">
+          <option value="">Fee head</option>
+          <option *ngFor="let head of feeHeads()" [value]="head.id">{{ head.name }}</option>
+        </select>
+        <select formControlName="class_id">
+          <option value="">Class</option>
+          <option *ngFor="let clazz of classes()" [value]="clazz.id">{{ clazz.name }}</option>
+        </select>
+        <select formControlName="academic_year_id">
+          <option value="">Academic year</option>
+          <option *ngFor="let year of academicYearOptions()" [value]="year.id">
+            {{ year.name }}{{ year.is_current ? ' (Current)' : '' }}
+          </option>
+        </select>
+        <input formControlName="name" placeholder="Installment name" />
+        <input formControlName="due_date" type="date" />
+        <input formControlName="amount" type="number" placeholder="Amount" />
+        <button type="submit" [disabled]="isBusy('createInstallment')">
+          {{ isBusy('createInstallment') ? 'Creating...' : 'Create installment' }}
+        </button>
+      </form>
+      <!-- Installment create END -->
+    </article>
+
+    <article class="panel">
+      <h3>Assign Installment</h3>
+      <p class="table__empty" *ngIf="!selectedEnrollment()">
+        Select a student first to auto-bind active enrollment, or choose Class and Session below.
+      </p>
+      <div class="finance__kpis" *ngIf="selectedEnrollment() as enrollment">
+        <div class="kpi">
+          <span>Enrollment ID</span>
+          <strong>{{ enrollment.id }}</strong>
+        </div>
+        <div class="kpi">
+          <span>Class / Section</span>
+          <strong>{{ enrollment.class_name || '-' }} {{ enrollment.section || '' }}</strong>
+        </div>
+        <div class="kpi">
+          <span>Status</span>
+          <strong>{{ enrollment.status || '-' }}</strong>
+        </div>
+      </div>
+      <form [formGroup]="assignInstallmentFilterForm" class="form">
+        <select formControlName="class_id">
+          <option value="">Class (for installment filter)</option>
+          <option *ngFor="let clazz of classes()" [value]="clazz.id">{{ clazz.name }}</option>
+        </select>
+        <select formControlName="academic_year_id">
+          <option value="">Session / Academic year</option>
+          <option *ngFor="let year of academicYearOptions()" [value]="year.id">
+            {{ year.name }}{{ year.is_current ? ' (Current)' : '' }}
+          </option>
+        </select>
+      </form>
+      <!-- Installment assign START (ngSubmit: assignInstallment) -->
+      <form [formGroup]="assignInstallmentForm" (ngSubmit)="assignInstallment()" class="form">
+        <input formControlName="enrollment_id" type="number" placeholder="Enrollment ID" />
+        <select formControlName="fee_installment_id">
+          <option value="">Select installment</option>
+          <option *ngFor="let item of assignableInstallments()" [value]="item.id">
+            {{ item.name }} - {{ item.amount }} (Due: {{ item.due_date }})
+          </option>
+        </select>
+        <input formControlName="amount" type="number" placeholder="Amount (auto-fills from installment)" />
+        <button
+          type="submit"
+          [disabled]="assignInstallmentForm.invalid || isBusy('assignInstallment')"
+          [class.btn-loading]="isBusy('assignInstallment')"
+        >
+          <span class="btn-spinner" *ngIf="isBusy('assignInstallment')" aria-hidden="true"></span>
+          <span>{{ isBusy('assignInstallment') ? 'Assigning...' : 'Assign to student' }}</span>
+        </button>
+      </form>
+      <!-- Installment assign END -->
+    </article>
+
+    <article class="panel">
+      <h3>Assign Installment to Class (Bulk)</h3>
+      <!-- Installment bulk-assign START (ngSubmit: bulkAssignInstallmentToClass) -->
+      <form [formGroup]="bulkAssignInstallmentForm" (ngSubmit)="bulkAssignInstallmentToClass()" class="form">
+        <select formControlName="class_id">
+          <option value="">Class</option>
+          <option *ngFor="let clazz of classes()" [value]="clazz.id">{{ clazz.name }}</option>
+        </select>
+        <select formControlName="academic_year_id">
+          <option value="">Academic year</option>
+          <option *ngFor="let year of academicYearOptions()" [value]="year.id">
+            {{ year.name }}{{ year.is_current ? ' (Current)' : '' }}
+          </option>
+        </select>
+        <select formControlName="fee_installment_id">
+          <option value="">Select installment</option>
+          <option *ngFor="let item of bulkInstallments()" [value]="item.id">
+            {{ item.name }} - {{ item.amount }} (Due: {{ item.due_date }})
+          </option>
+        </select>
+        <input formControlName="amount" type="number" placeholder="Override amount (optional)" />
+        <button type="submit" [disabled]="isBusy('bulkAssignInstallment')">
+          {{ isBusy('bulkAssignInstallment') ? 'Assigning...' : 'Assign to class' }}
+        </button>
+      </form>
+      <!-- Installment bulk-assign END -->
+      <p class="table__empty">Bulk inserts obligations + ledger debits (append-only).</p>
+    </article>
+
+    <article class="panel">
+      <h3>Special Fee (One-Off Debit)</h3>
+      <!-- Special fee debit START (ngSubmit: postSpecialFee) -->
+      <form [formGroup]="specialFeeForm" (ngSubmit)="postSpecialFee()" class="form">
+        <input formControlName="enrollment_id" type="number" placeholder="Enrollment ID" />
+        <input formControlName="amount" type="number" placeholder="Amount" />
+        <input formControlName="posted_at" type="date" />
+        <input formControlName="narration" placeholder="Narration (reason)" />
+        <button type="submit" [disabled]="isBusy('postSpecialFee')">
+          {{ isBusy('postSpecialFee') ? 'Posting...' : 'Post special fee' }}
+        </button>
+      </form>
+      <!-- Special fee debit END -->
+    </article>
+
+    <article class="panel panel--wide">
+      <div class="panel__header">
+        <h3>Installments</h3>
+        <!-- Installments refresh START (click: refreshInstallments) -->
+        <button type="button" class="ghost" (click)="refreshInstallments()">Refresh</button>
+        <!-- Installments refresh END -->
+      </div>
+      <div class="panel__scroll panel__scroll--wide">
+        <div class="table table--seven table--installments">
+          <div class="table__row table__head">
+            <span>ID</span>
+            <span>Name</span>
+            <span>Fee head</span>
+            <span>Class</span>
+            <span>Year</span>
+            <span>Due</span>
+            <span>Amount</span>
+          </div>
+          <div class="table__row" *ngFor="let item of installments()">
+            <span>{{ item.id }}</span>
+            <span class="table__wrap">{{ item.name }}</span>
+            <span class="table__wrap">{{ item.fee_head?.name || item.fee_head_id }}</span>
+            <span>{{ item.class_name || item.class_id }}</span>
+            <span>{{ item.academic_year_name || item.academic_year_id }}</span>
+            <span>{{ item.due_date }}</span>
+            <span>{{ item.amount }}</span>
+          </div>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section *ngIf="activeTab() === 'ledger'" class="finance__stack">
+    <article class="panel">
+      <h3>Ledger Lookup</h3>
+      <!-- Ledger lookup START (click: loadLedger, loadBalance) -->
+      <form [formGroup]="ledgerQueryForm" class="form">
+        <input formControlName="student_id" type="number" placeholder="Student ID" />
+        <select formControlName="academic_year_id">
+          <option value="">Academic year (optional)</option>
+          <option *ngFor="let year of academicYearOptions()" [value]="year.id">
+            {{ year.name }}{{ year.is_current ? ' (Current)' : '' }}
+          </option>
+        </select>
+        <input formControlName="start_date" type="date" />
+        <input formControlName="end_date" type="date" />
+        <button type="button" (click)="loadLedger()">Load ledger</button>
+        <button type="button" class="ghost" (click)="loadBalance()">Load balance</button>
+        <button type="button" class="ghost" (click)="downloadStudentLedger()">
+          Download student ledger
+        </button>
+        <button type="button" class="ghost" (click)="downloadStudentLedgerPdf()">
+          Download student ledger (PDF)
+        </button>
+      </form>
+      <!-- Ledger lookup END -->
+      <div class="ledger__balance" *ngIf="ledgerBalance() !== null">
+        <div>
+          <span>Balance</span>
+          <strong>{{ ledgerBalance() }}</strong>
+        </div>
+      </div>
+    </article>
+
+    <article class="panel">
+      <h3>Bulk Download by Class</h3>
+      <form [formGroup]="classLedgerDownloadForm" class="form">
+        <select formControlName="class_id">
+          <option value="">Class</option>
+          <option *ngFor="let clazz of classes()" [value]="clazz.id">{{ clazz.name }}</option>
+        </select>
+        <select formControlName="format">
+          <option value="excel">Excel</option>
+          <option value="pdf">PDF</option>
+        </select>
+        <select formControlName="academic_year_id">
+          <option value="">Academic year (optional)</option>
+          <option *ngFor="let year of academicYearOptions()" [value]="year.id">
+            {{ year.name }}{{ year.is_current ? ' (Current)' : '' }}
+          </option>
+        </select>
+        <input formControlName="start_date" type="date" />
+        <input formControlName="end_date" type="date" />
+        <button type="button" (click)="downloadClassLedger()">Bulk Download by Class</button>
+      </form>
+      <p class="table__empty">
+        Excel downloads class ledger sheet. PDF downloads student statements one-by-one with student details.
+      </p>
+    </article>
+
+    <article class="panel panel--wide">
+      <h3>Ledger Entries</h3>
+      <div class="panel__scroll panel__scroll--both panel__scroll--wide">
+        <div class="table table--ledger">
+          <div class="table__row table__head">
+            <span>ID</span>
+            <span>Type</span>
+            <span>Ref</span>
+            <span>Debit</span>
+            <span>Credit</span>
+            <span>Running</span>
+            <span>Posted</span>
+            <span>Reversal</span>
+          </div>
+          <div class="table__row" *ngFor="let entry of ledgerEntries()">
+            <span>{{ entry.id }}</span>
+            <span>{{ entry.transaction_type }}</span>
+            <span>{{ entry.reference_type }} #{{ entry.reference_id }}</span>
+            <span>{{ entry.debit }}</span>
+            <span>{{ entry.credit }}</span>
+            <span>{{ entry.running_balance }}</span>
+            <span>{{ entry.posted_at }}</span>
+            <span>{{ entry.is_reversal ? 'Yes' : 'No' }}</span>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="panel">
+      <h3>Reverse Entry</h3>
+      <!-- Ledger reversal START (ngSubmit: reverseEntry) -->
+      <form [formGroup]="reversalForm" (ngSubmit)="reverseEntry()" class="form">
+        <input formControlName="entry_id" type="number" placeholder="Ledger entry ID" />
+        <input formControlName="reason" placeholder="Reason for reversal" />
+        <button type="submit" [disabled]="isBusy('reverseEntry')">
+          {{ isBusy('reverseEntry') ? 'Creating...' : 'Create reversal' }}
+        </button>
+      </form>
+      <!-- Ledger reversal END -->
+    </article>
+  </section>
+
+  <section *ngIf="activeTab() === 'payments'" class="finance__stack">
+    <article class="panel">
+      <h3>Record Payment (Enrollment Based)</h3>
+      <!-- Payment create START (ngSubmit: createPayment) -->
+      <form [formGroup]="paymentForm" (ngSubmit)="createPayment()" class="form">
+        <input formControlName="enrollment_id" type="number" placeholder="Enrollment ID" />
+        <input formControlName="amount" type="number" placeholder="Amount" />
+        <input formControlName="payment_date" type="date" />
+        <select formControlName="payment_method">
+          <option value="cash">Cash</option>
+          <option value="cheque">Cheque</option>
+          <option value="online">Online</option>
+          <option value="card">Card</option>
+          <option value="upi">UPI</option>
+        </select>
+        <input formControlName="transaction_id" placeholder="Transaction ID" />
+        <input formControlName="remarks" placeholder="Remarks" />
+        <button type="submit" [disabled]="isBusy('createPayment')">
+          {{ isBusy('createPayment') ? 'Recording...' : 'Record payment' }}
+        </button>
+      </form>
+      <!-- Payment create END -->
+    </article>
+
+    <article class="panel">
+      <h3>Payment History</h3>
+      <!-- Payments lookup START (click: loadPayments) -->
+      <form [formGroup]="paymentLookupForm" class="form">
+        <input formControlName="enrollment_id" type="number" placeholder="Enrollment ID" />
+        <button type="button" (click)="loadPayments()">Load payments</button>
+      </form>
+      <!-- Payments lookup END -->
+      <div class="payment-history__actions" *ngIf="payments().length">
+        <button type="button" class="ghost" (click)="toggleAllPaymentSelection()">
+          {{ allSelectablePaymentsSelected() ? 'Clear all' : 'Select all' }}
+        </button>
+        <button
+          type="button"
+          (click)="downloadSelectedPaymentsPdf()"
+          [disabled]="!selectedPaymentIds().length"
+        >
+          Generate PDF ({{ selectedPaymentIds().length }})
+        </button>
+        <span class="badge" *ngIf="selectedPaymentIds().length">
+          Total: {{ selectedPaymentsTotal() }}
+        </span>
+      </div>
+      <div class="panel__scroll panel__scroll--both">
+        <div class="table table--payments" *ngIf="payments().length">
+          <div class="table__row table__head">
+            <span>
+              <input
+                type="checkbox"
+                [checked]="allSelectablePaymentsSelected()"
+                (change)="toggleAllPaymentSelection()"
+              />
+            </span>
+            <span>ID</span>
+            <span>Receipt</span>
+            <span>Date</span>
+            <span>Amount</span>
+            <span>Method</span>
+            <span>Status</span>
+            <span>Receipt</span>
+          </div>
+          <div class="table__row" *ngFor="let payment of payments()">
+            <span>
+              <input
+                type="checkbox"
+                [checked]="selectedPaymentIds().includes(payment.id)"
+                [disabled]="!isPaymentSelectable(payment)"
+                (change)="togglePaymentSelection(payment.id)"
+              />
+            </span>
+            <span>{{ payment.id }}</span>
+            <span>{{ payment.receipt_number }}</span>
+            <span>{{ payment.payment_date }}</span>
+            <span>{{ payment.amount }}</span>
+            <span>{{ payment.payment_method }}</span>
+            <span>{{ payment.is_refunded ? 'Refunded' : 'OK' }}</span>
+            <!-- Payment receipt download START (click: downloadPaymentReceipt) -->
+            <button
+              type="button"
+              class="ghost"
+              (click)="downloadPaymentReceipt(payment.id)"
+              [disabled]="payment.is_refunded || payment.amount <= 0 || isBusy('paymentReceipt:' + payment.id)"
+            >
+              {{ isBusy('paymentReceipt:' + payment.id) ? 'Generating...' : 'Download' }}
+            </button>
+            <!-- Payment receipt download END -->
+          </div>
+        </div>
+        <p class="table__empty" *ngIf="!payments().length">No payments loaded.</p>
+      </div>
+    </article>
+
+    <article class="panel">
+      <h3>Refund Payment</h3>
+      <!-- Payment refund START (ngSubmit: refundPayment) -->
+      <form [formGroup]="refundForm" (ngSubmit)="refundPayment()" class="form">
+        <input formControlName="payment_id" type="number" placeholder="Payment ID" />
+        <input formControlName="refund_reason" placeholder="Refund reason" />
+        <input formControlName="refund_date" type="date" />
+        <button type="submit" [disabled]="isBusy('refundPayment')">
+          {{ isBusy('refundPayment') ? 'Processing...' : 'Process refund' }}
+        </button>
+      </form>
+      <!-- Payment refund END -->
+    </article>
+  </section>
+
+  <section *ngIf="activeTab() === 'receipts'" class="finance__stack">
+    <article class="panel">
+      <h3>Record Receipt (Student Based)</h3>
+      <!-- Receipt create START (ngSubmit: createReceipt) -->
+      <form [formGroup]="receiptForm" (ngSubmit)="createReceipt()" class="form">
+        <input formControlName="student_id" type="number" placeholder="Student ID" />
+        <select formControlName="academic_year_id">
+          <option value="">Academic year</option>
+          <option *ngFor="let year of academicYearOptions()" [value]="year.id">
+            {{ year.name }}{{ year.is_current ? ' (Current)' : '' }}
+          </option>
+        </select>
+        <input formControlName="amount" type="number" placeholder="Amount" />
+        <select formControlName="payment_method">
+          <option value="cash">Cash</option>
+          <option value="cheque">Cheque</option>
+          <option value="online">Online</option>
+          <option value="card">Card</option>
+          <option value="upi">UPI</option>
+        </select>
+        <input formControlName="transaction_id" placeholder="Transaction ID" />
+        <input formControlName="paid_at" type="datetime-local" />
+        <button type="submit" [disabled]="isBusy('createReceipt')">
+          {{ isBusy('createReceipt') ? 'Creating...' : 'Create receipt' }}
+        </button>
+      </form>
+      <!-- Receipt create END -->
+    </article>
+  </section>
+
+  <section *ngIf="activeTab() === 'holds'" class="finance__stack">
+    <article class="panel">
+      <h3>Create Financial Hold</h3>
+      <!-- Hold create START (ngSubmit: createHold) -->
+      <form [formGroup]="holdForm" (ngSubmit)="createHold()" class="form">
+        <input formControlName="student_id" type="number" placeholder="Student ID" />
+        <input formControlName="reason" placeholder="Reason" />
+        <input formControlName="outstanding_amount" type="number" placeholder="Outstanding amount" />
+        <button type="submit" [disabled]="isBusy('createHold')">
+          {{ isBusy('createHold') ? 'Applying...' : 'Apply hold' }}
+        </button>
+      </form>
+      <!-- Hold create END -->
+    </article>
+
+    <article class="panel panel--wide">
+      <div class="panel__header">
+        <h3>Financial Holds</h3>
+        <!-- Holds refresh START (click: refreshHolds) -->
+        <button type="button" class="ghost" (click)="refreshHolds()">Refresh</button>
+        <!-- Holds refresh END -->
+      </div>
+      <div class="panel__scroll panel__scroll--both panel__scroll--wide">
+        <div class="table table--six table--holds">
+          <div class="table__row table__head">
+            <span>ID</span>
+            <span>Student</span>
+            <span>Reason</span>
+            <span>Outstanding</span>
+            <span>Status</span>
+            <span>Action</span>
+          </div>
+          <div class="table__row" *ngFor="let hold of holds()">
+            <span>{{ hold.id }}</span>
+            <span>{{ hold.student_id }}</span>
+            <span class="table__wrap">{{ hold.reason }}</span>
+            <span>{{ hold.outstanding_amount || 0 }}</span>
+            <span>{{ hold.is_active ? 'Active' : 'Inactive' }}</span>
+            <!-- Hold status toggle START (click: toggleHold) -->
+            <button type="button" (click)="toggleHold(hold)" [disabled]="isBusy('toggleHold:' + hold.id)">
+              {{
+                isBusy('toggleHold:' + hold.id)
+                  ? 'Updating...'
+                  : (hold.is_active ? 'Deactivate' : 'Activate')
+              }}
+            </button>
+            <!-- Hold status toggle END -->
+          </div>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section *ngIf="activeTab() === 'reports'" class="finance__stack">
+    <article class="panel">
+      <h3>Due Report</h3>
+      <!-- Due report START (click: runDueReport) -->
+      <form [formGroup]="dueReportForm" class="form">
+        <select formControlName="academic_year_id">
+          <option value="">All academic years</option>
+          <option *ngFor="let year of academicYearOptions()" [value]="year.id">
+            {{ year.name }}{{ year.is_current ? ' (Current)' : '' }}
+          </option>
+        </select>
+        <select formControlName="section_id">
+          <option value="">All sections</option>
+          <option *ngFor="let section of sections()" [value]="section.id">{{ section.name }}</option>
+        </select>
+        <button type="button" (click)="runDueReport()">Generate due report</button>
+      </form>
+      <!-- Due report END -->
+      <div class="panel__scroll panel__scroll--both panel__scroll--wide">
+        <div class="table table--eight table--due-report">
+          <div class="table__row table__head">
+            <span>Enrollment</span>
+            <span>Student</span>
+            <span>Year</span>
+            <span>Class</span>
+            <span>Section</span>
+            <span>Paid</span>
+            <span>Unpaid</span>
+            <span>Status</span>
+          </div>
+          <div class="table__row" *ngFor="let row of dueReportRows()">
+            <span>{{ row.enrollment_id }}</span>
+            <span class="table__wrap">{{ row.student }}</span>
+            <span>{{ row.academic_year }}</span>
+            <span>{{ row.class }}</span>
+            <span>{{ row.section }}</span>
+            <span>{{ row.total_credits }}</span>
+            <span>{{ row.balance_due }}</span>
+            <span>{{ row.balance_due > 0 ? 'Unpaid' : 'Paid' }}</span>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="panel">
+      <h3>Collection Report</h3>
+      <!-- Collection report START (click: runCollectionReport) -->
+      <form [formGroup]="collectionReportForm" class="form">
+        <input formControlName="start_date" type="date" />
+        <input formControlName="end_date" type="date" />
+        <button type="button" (click)="runCollectionReport()">Generate collection report</button>
+      </form>
+      <!-- Collection report END -->
+      <div class="finance__kpis" *ngIf="collectionSummary() as summary">
+        <div class="kpi">
+          <span>Total Amount</span>
+          <strong>{{ summary.total_amount }}</strong>
+        </div>
+        <div class="kpi">
+          <span>Total Transactions</span>
+          <strong>{{ summary.total_count }}</strong>
+        </div>
+      </div>
+      <div class="panel__scroll panel__scroll--both" *ngIf="collectionPayments().length > 0">
+        <div class="table table--collection">
+          <div class="table__row table__head">
+            <span>ID</span>
+            <span>Receipt</span>
+            <span>Date</span>
+            <span>Amount</span>
+            <span>Method</span>
+            <span>Remarks</span>
+          </div>
+          <div class="table__row" *ngFor="let payment of collectionPayments()">
+            <span>{{ payment.id }}</span>
+            <span>{{ payment.receipt_number }}</span>
+            <span>{{ payment.payment_date }}</span>
+            <span>{{ payment.amount }}</span>
+            <span>{{ payment.payment_method }}</span>
+            <span class="table__wrap">{{ payment.remarks || '-' }}</span>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="panel">
+      <h3>Transport Route-Wise Report</h3>
+      <!-- Route-wise report START (click: runRouteWiseReport) -->
+      <form [formGroup]="routeWiseReportForm" class="form">
+        <select formControlName="academic_year_id">
+          <option value="">All academic years</option>
+          <option *ngFor="let year of academicYearOptions()" [value]="year.id">
+            {{ year.name }}{{ year.is_current ? ' (Current)' : '' }}
+          </option>
+        </select>
+        <button type="button" (click)="runRouteWiseReport()">Generate route-wise report</button>
+      </form>
+      <!-- Route-wise report END -->
+      <p class="table__empty" *ngIf="reportsLoading()">Generating report...</p>
+      <div class="panel__scroll panel__scroll--both" *ngIf="routeWiseRows().length > 0">
+        <div class="table table--route-wise">
+          <div class="table__row table__head">
+            <span>Route</span>
+            <span>Number</span>
+            <span>Students</span>
+            <span>Fee / Student</span>
+            <span>Total Amount</span>
+            <span>Route ID</span>
+          </div>
+          <div class="table__row" *ngFor="let row of routeWiseRows()">
+            <span class="table__wrap">{{ row.route_name || 'N/A' }}</span>
+            <span>{{ row.route_number || '-' }}</span>
+            <span>{{ row.student_count }}</span>
+            <span>{{ row.fee_amount }}</span>
+            <span>{{ row.total_amount }}</span>
+            <span>{{ row.route_id || '-' }}</span>
+          </div>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section *ngIf="activeTab() === 'transport'" class="finance__grid">
+    <article class="panel panel--wide">
+      <div class="panel__header">
+        <h3>Transport Context</h3>
+        <!-- Transport assignments load START (click: loadTransportAssignments) -->
+        <button type="button" class="ghost" (click)="loadTransportAssignments()">Load assignments</button>
+        <!-- Transport assignments load END -->
+      </div>
+      <div class="form" [formGroup]="transportAssignmentsQueryForm">
+        <input formControlName="enrollment_id" type="number" placeholder="Enrollment ID (for stop/charge dropdowns)" />
+      </div>
+      <p class="table__empty" *ngIf="!transportAssignments().length">
+        Enter enrollment id and click “Load assignments”.
+      </p>
+    </article>
+
+    <article class="panel">
+      <h3>Create Route</h3>
+      <!-- Transport route create START (ngSubmit: createRoute) -->
+      <form [formGroup]="transportRouteForm" (ngSubmit)="createRoute()" class="form">
+        <input formControlName="route_name" placeholder="Route name" />
+        <input formControlName="vehicle_number" placeholder="Vehicle number" />
+        <input formControlName="driver_name" placeholder="Driver" />
+        <button type="submit" [disabled]="isBusy('createRoute')">
+          {{ isBusy('createRoute') ? 'Creating...' : 'Add route' }}
+        </button>
+      </form>
+      <!-- Transport route create END -->
+    </article>
+
+    <article class="panel">
+      <h3>Add Stop</h3>
+      <!-- Transport stop create START (ngSubmit: createStop) -->
+      <form [formGroup]="transportStopForm" (ngSubmit)="createStop()" class="form">
+        <select formControlName="route_id">
+          <option value="">Route</option>
+          <option *ngFor="let route of routes()" [value]="route.id">
+            {{ route.route_name || ('Route #' + route.id) }}
+          </option>
+        </select>
+        <input formControlName="stop_name" placeholder="Stop name" />
+        <input formControlName="fee_amount" type="number" placeholder="Monthly amount" />
+        <input formControlName="distance_km" type="number" placeholder="Distance (km)" />
+        <button type="submit" [disabled]="isBusy('createStop')">
+          {{ isBusy('createStop') ? 'Creating...' : 'Add stop' }}
+        </button>
+      </form>
+      <!-- Transport stop create END -->
+    </article>
+
+    <article class="panel">
+      <h3>Assign Transport</h3>
+      <!-- Transport assignment create START (ngSubmit: createAssignment) -->
+      <form [formGroup]="transportAssignmentForm" (ngSubmit)="createAssignment()" class="form">
+        <input formControlName="enrollment_id" type="number" placeholder="Enrollment ID" />
+        <select formControlName="route_id">
+          <option value="">Route</option>
+          <option *ngFor="let route of routes()" [value]="route.id">
+            {{ route.route_name || ('Route #' + route.id) }}
+          </option>
+        </select>
+        <select formControlName="stop_id">
+          <option value="">Stop</option>
+          <option *ngFor="let stop of filteredStopsForAssignment()" [value]="stop.id">
+            {{ stop.stop_name || ('Stop #' + stop.id) }} - {{ stop.fee_amount || 0 }}
+          </option>
+        </select>
+        <input formControlName="start_date" type="date" />
+        <button type="submit" [disabled]="isBusy('createAssignment')">
+          {{ isBusy('createAssignment') ? 'Assigning...' : 'Assign' }}
+        </button>
+      </form>
+      <!-- Transport assignment create END -->
+    </article>
+
+    <article class="panel panel--wide">
+      <div class="panel__header">
+        <h3>Bulk Assign Transport</h3>
+        <span class="badge" *ngIf="bulkTransportSelectedEnrollmentIds().length">
+          {{ bulkTransportSelectedEnrollmentIds().length }} selected
+        </span>
+      </div>
+
+      <!-- Transport bulk assignment START (click: searchBulkTransportEnrollments, bulkAssignTransport, loadBulkTransportLedgerPreview) -->
+      <div class="form" [formGroup]="bulkTransportAssignForm">
+        <select formControlName="route_id">
+          <option value="">Route</option>
+          <option *ngFor="let route of routes()" [value]="route.id">
+            {{ route.route_name || ('Route #' + route.id) }}
+          </option>
+        </select>
+
+        <select formControlName="stop_id">
+          <option value="">Stop</option>
+          <option *ngFor="let stop of filteredStopsForBulkAssignment()" [value]="stop.id">
+            {{ stop.stop_name || ('Stop #' + stop.id) }} - {{ stop.fee_amount || 0 }}
+          </option>
+        </select>
+
+        <input formControlName="start_date" type="date" />
+        <input formControlName="search" placeholder="Search by enrollment id / student id / admission / name" />
+
+        <button type="button" class="ghost" (click)="searchBulkTransportEnrollments()" [disabled]="bulkTransportEnrollmentsLoading()">
+          {{ bulkTransportEnrollmentsLoading() ? 'Searching...' : 'Search enrollments' }}
+        </button>
+
+        <button
+          type="button"
+          (click)="bulkAssignTransport()"
+          [disabled]="isBusy('bulkAssignTransport') || !bulkTransportSelectedEnrollmentIds().length"
+        >
+          {{ isBusy('bulkAssignTransport') ? 'Assigning...' : 'Assign selected + charge' }}
+        </button>
+
+        <button type="button" class="ghost" (click)="clearBulkTransportSelection()" [disabled]="!bulkTransportSelectedEnrollmentIds().length">
+          Clear selection
+        </button>
+      </div>
+
+      <p class="table__empty" *ngIf="bulkTransportEnrollmentsLoading()">Loading enrollments...</p>
+
+      <div class="panel__scroll panel__scroll--both panel__scroll--wide" *ngIf="bulkTransportEnrollments().length">
+        <div class="table table--seven">
+          <div class="table__row table__head">
+            <span>Select</span>
+            <span>Enrollment</span>
+            <span>Student</span>
+            <span>Admission</span>
+            <span>Year</span>
+            <span>Status</span>
+            <span>Ledger</span>
+          </div>
+          <div class="table__row" *ngFor="let e of bulkTransportEnrollments()">
+            <span>
+              <input
+                type="checkbox"
+                [checked]="bulkTransportSelectedEnrollmentIds().includes(e.id)"
+                (change)="toggleBulkTransportEnrollment(e.id)"
+              />
+            </span>
+            <span>#{{ e.id }}</span>
+            <span class="table__wrap">
+              {{ e.student?.user?.first_name }} {{ e.student?.user?.last_name }}
+            </span>
+            <span>{{ e.student?.admission_number || '-' }}</span>
+            <span>{{ e.academicYear?.name || e.academic_year_id }}</span>
+            <span>{{ e.status }}</span>
+            <button type="button" class="ghost" (click)="loadBulkTransportLedgerPreview(e)">
+              Ledger
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <p class="table__empty" *ngIf="!bulkTransportEnrollmentsLoading() && !bulkTransportEnrollments().length">
+        Search to load active enrollments (up to 50 at a time).
+      </p>
+      <!-- Transport bulk assignment END -->
+    </article>
+
+    <article class="panel panel--wide" *ngIf="bulkTransportLedgerPreviewEnrollment() as preview">
+      <div class="panel__header">
+        <h3>Ledger Preview</h3>
+        <span class="badge">Enrollment #{{ preview.id }}</span>
+      </div>
+
+      <p class="table__empty" *ngIf="bulkTransportLedgerPreviewLoading()">Loading ledger...</p>
+
+      <div class="panel__scroll panel__scroll--both panel__scroll--wide" *ngIf="!bulkTransportLedgerPreviewLoading()">
+        <div class="table table--ledger" *ngIf="bulkTransportLedgerPreviewEntries().length">
+          <div class="table__row table__head">
+            <span>ID</span>
+            <span>Type</span>
+            <span>Ref</span>
+            <span>Amount</span>
+            <span>Posted</span>
+            <span>Reversal</span>
+          </div>
+          <div class="table__row" *ngFor="let entry of bulkTransportLedgerPreviewEntries()">
+            <span>{{ entry.id }}</span>
+            <span>{{ entry.transaction_type }}</span>
+            <span>{{ entry.reference_type }} {{ entry.reference_id ? ('#' + entry.reference_id) : '' }}</span>
+            <span>{{ entry.amount }}</span>
+            <span>{{ entry.posted_at || entry.created_at }}</span>
+            <span>{{ entry.is_reversal ? 'Yes' : 'No' }}</span>
+          </div>
+        </div>
+
+        <p class="table__empty" *ngIf="!bulkTransportLedgerPreviewEntries().length">No ledger entries found.</p>
+      </div>
+    </article>
+
+    <article class="panel panel--wide">
+      <div class="panel__header">
+        <h3>Assignments</h3>
+        <!-- Transport assignments refresh START (click: loadTransportAssignments) -->
+        <button type="button" class="ghost" (click)="loadTransportAssignments()">Refresh</button>
+        <!-- Transport assignments refresh END -->
+      </div>
+      <div class="panel__scroll panel__scroll--both panel__scroll--wide" *ngIf="transportAssignments().length">
+        <div class="table table--seven table--transport-assignments">
+          <div class="table__row table__head">
+            <span>ID</span>
+            <span>Status</span>
+            <span>Route</span>
+            <span>Stop</span>
+            <span>Start</span>
+            <span>End</span>
+            <span>Enrollment</span>
+          </div>
+          <div class="table__row" *ngFor="let item of transportAssignments()">
+            <span>{{ item.id }}</span>
+            <span>{{ item.status }}</span>
+            <span class="table__wrap">{{ item.route?.route_name || item.route_id }}</span>
+            <span class="table__wrap">{{ item.stop?.stop_name || item.stop_id }} ({{ item.stop?.fee_amount || 0 }})</span>
+            <span>{{ item.start_date }}</span>
+            <span>{{ item.end_date || '-' }}</span>
+            <span>{{ item.enrollment_id || '-' }}</span>
+          </div>
+        </div>
+      </div>
+      <ng-template #noAssignments>
+        <p class="table__empty">No assignments found for the selected enrollment.</p>
+      </ng-template>
+    </article>
+
+    <article class="panel">
+      <h3>Stop Assignment</h3>
+      <!-- Transport assignment stop START (ngSubmit: stopAssignment) -->
+      <form [formGroup]="transportStopAssignmentForm" (ngSubmit)="stopAssignment()" class="form">
+        <select formControlName="assignment_id">
+          <option value="">Assignment</option>
+          <option *ngFor="let item of activeTransportAssignments()" [value]="item.id">
+            #{{ item.id }} - {{ item.route?.route_name || item.route_id }} ({{ item.status }})
+          </option>
+        </select>
+        <input formControlName="end_date" type="date" />
+        <button type="submit" [disabled]="isBusy('stopAssignment') || !activeTransportAssignments().length">
+          {{ isBusy('stopAssignment') ? 'Stopping...' : 'Stop' }}
+        </button>
+      </form>
+      <!-- Transport assignment stop END -->
+    </article>
+
+    <article class="panel panel--wide">
+      <h3>Generate Monthly Charge</h3>
+      <!-- Transport monthly charge START (ngSubmit: generateCycle) -->
+      <form [formGroup]="transportCycleForm" (ngSubmit)="generateCycle()" class="form">
+        <select formControlName="assignment_id">
+          <option value="">Assignment</option>
+          <option *ngFor="let item of activeTransportAssignments()" [value]="item.id">
+            #{{ item.id }} - {{ item.route?.route_name || item.route_id }} ({{ item.status }})
+          </option>
+        </select>
+        <input formControlName="month" type="number" placeholder="Month" />
+        <input formControlName="year" type="number" placeholder="Year" />
+        <input formControlName="amount" type="number" placeholder="Amount (optional)" />
+        <button type="submit" [disabled]="isBusy('generateCycle') || !activeTransportAssignments().length">
+          {{ isBusy('generateCycle') ? 'Generating...' : 'Generate' }}
+        </button>
+      </form>
+      <!-- Transport monthly charge END -->
+    </article>
+  </section>
+</section>

@@ -1,0 +1,81 @@
+<div class="form" *ngIf="!loading(); else loadingTpl">
+  <div class="form__header">
+    <h2>{{ isEdit() ? 'Edit Enrollment' : 'New Enrollment' }}</h2>
+    <p>Enrollment is academic-year specific. Locked enrollments are immutable.</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" class="form__grid">
+    <label>
+      <span>Student *</span>
+      <input [formControl]="studentSearch" placeholder="Search students" />
+      <select formControlName="student_id">
+        <option value="">Select student</option>
+        <option *ngFor="let student of students()" [value]="student.id">
+          {{ getStudentLabel(student) }} ({{ student.admission_number }})
+        </option>
+      </select>
+      <div class="pagination" *ngIf="studentsPagination().last_page > 1">
+        <button type="button" (click)="previousStudentsPage()">◀</button>
+        <span>Page {{ studentsPagination().current_page }} / {{ studentsPagination().last_page }}</span>
+        <button type="button" (click)="nextStudentsPage()">▶</button>
+      </div>
+    </label>
+    <label>
+      <span>Academic Year *</span>
+      <select formControlName="academic_year_id">
+        <option value="">Select year</option>
+        <option *ngFor="let year of academicYears()" [value]="year.id">
+          {{ year.name }}
+        </option>
+      </select>
+    </label>
+    <label>
+      <span>Class</span>
+      <select formControlName="class_id">
+        <option value="">All classes</option>
+        <option *ngFor="let classItem of classes()" [value]="classItem.id">
+          {{ classItem.name }}
+        </option>
+      </select>
+    </label>
+    <label>
+      <span>Section</span>
+      <input [formControl]="sectionSearch" placeholder="Search sections" />
+      <select formControlName="section_id">
+        <option value="">Unassigned</option>
+        <option *ngFor="let section of filteredSections()" [value]="section.id">
+          {{ section.class?.name }} - {{ section.name }}
+        </option>
+      </select>
+      <div class="pagination" *ngIf="sectionsPagination().last_page > 1">
+        <button type="button" (click)="previousSectionsPage()">◀</button>
+        <span>Page {{ sectionsPagination().current_page }} / {{ sectionsPagination().last_page }}</span>
+        <button type="button" (click)="nextSectionsPage()">▶</button>
+      </div>
+    </label>
+    <label>
+      <span>Roll Number</span>
+      <input formControlName="roll_number" type="number" />
+    </label>
+    <label>
+      <span>Enrollment Date *</span>
+      <input formControlName="enrollment_date" type="date" placeholder="dd-mm-yyyy" />
+    </label>
+    <label>
+      <span>Remarks</span>
+      <textarea formControlName="remarks" rows="3"></textarea>
+    </label>
+
+    <div class="span-2">
+      <button type="submit" [disabled]="submitting()">
+        {{ submitting() ? 'Saving...' : (isEdit() ? 'Save Changes' : 'Create Enrollment') }}
+      </button>
+    </div>
+  </form>
+</div>
+
+<ng-template #loadingTpl>
+  <p>Loading...</p>
+</ng-template>

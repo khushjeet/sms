@@ -1,0 +1,161 @@
+.student-section {
+  --surface: #ffffff;
+  --line: #d9e4ef;
+  --text: #132634;
+  --muted: #62778c;
+  --head: #f5f8fc;
+
+  display: grid;
+  gap: 14px;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 14px;
+}
+
+p {
+  margin: 0 0 8px;
+}
+
+span {
+  color: var(--muted);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.error {
+  color: #9f1239;
+}
+
+.table-wrap {
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 560px;
+}
+
+th,
+td {
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+th {
+  background: var(--head);
+}
+
+.action-btn {
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #e5f0ff;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admit-card-panel h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.admit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.status-pill {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  text-transform: capitalize;
+  background: #e0f2fe;
+  color: #0c4a6e;
+  border: 1px solid #bae6fd;
+}
+
+.status-pill--blocked {
+  background: #fee2e2;
+  color: #7f1d1d;
+  border-color: #fecaca;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+
+.meta-grid div {
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.meta-grid span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.notice {
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  display: grid;
+  gap: 4px;
+  background: #f8fafc;
+}
+
+.notice--warn {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+@media (prefers-color-scheme: dark) {
+  .student-section {
+    --surface: #101b23;
+    --line: #2a3f50;
+    --text: #e5edf4;
+    --muted: #9db0be;
+    --head: #172734;
+  }
+
+  .status-pill {
+    background: #0f172a;
+    color: #bae6fd;
+    border-color: #1e3a8a;
+  }
+
+  .status-pill--blocked {
+    background: #3f1f1f;
+    color: #fecaca;
+    border-color: #7f1d1d;
+  }
+
+  .notice {
+    background: #0f172a;
+  }
+
+  .notice--warn {
+    background: #3f1f1f;
+  }
+}

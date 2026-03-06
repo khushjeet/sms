@@ -1,0 +1,33 @@
+<div class="classes">
+  <div class="classes__header">
+    <div>
+      <h2>Classes</h2>
+      <p>Maintain academic structure and class ordering.</p>
+    </div>
+    <a routerLink="/classes/new" class="primary">Add Class</a>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <div class="table" *ngIf="!loading(); else loadingTpl">
+    <div class="table__row table__row--head">
+      <span>Name</span>
+      <span>Order</span>
+      <span>Status</span>
+      <span>Actions</span>
+    </div>
+    <div class="table__row" *ngFor="let item of classes()">
+      <span>{{ item.name }}</span>
+      <span>{{ item.numeric_order }}</span>
+      <span>{{ item.status }}</span>
+      <span class="actions">
+        <a [routerLink]="['/classes', item.id, 'edit']">Edit</a>
+        <button type="button" (click)="deleteClass(item.id)">Delete</button>
+      </span>
+    </div>
+  </div>
+
+  <ng-template #loadingTpl>
+    <p>Loading classes...</p>
+  </ng-template>
+</div>

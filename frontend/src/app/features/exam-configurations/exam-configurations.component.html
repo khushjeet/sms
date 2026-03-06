@@ -1,0 +1,61 @@
+<div class="exam-configs">
+  <div class="exam-configs__header">
+    <h2>Exam Configuration</h2>
+    <p>Define exam count and names per academic year (for example: Quarterly, Half Yearly, Final).</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="message()">{{ message() }}</p>
+
+  <div class="controls">
+    <select [ngModel]="selectedAcademicYearId()" (ngModelChange)="onAcademicYearChange($event)">
+      <option value="">Select academic year</option>
+      <option *ngFor="let year of academicYears()" [value]="year.id">{{ year.name }}</option>
+    </select>
+
+    <input
+      [ngModel]="newExamName()"
+      (ngModelChange)="newExamName.set($event)"
+      placeholder="Exam name"
+      maxlength="100"
+    />
+    <input
+      type="number"
+      min="1"
+      [ngModel]="newExamSequence()"
+      (ngModelChange)="newExamSequence.set($event)"
+      placeholder="Sequence (optional)"
+    />
+    <button type="button" (click)="addExam()" [disabled]="saving() || loading()">
+      {{ saving() ? 'Saving...' : 'Add Exam' }}
+    </button>
+  </div>
+
+  <div class="table" *ngIf="!loading(); else loadingTpl">
+    <div class="table__row table__row--head">
+      <span>Sequence</span>
+      <span>Name</span>
+      <span>Status</span>
+      <span>Actions</span>
+    </div>
+
+    <div class="table__row" *ngFor="let exam of exams()">
+      <span>{{ exam.sequence }}</span>
+      <span>{{ exam.name }}</span>
+      <span>{{ exam.is_active ? 'Active' : 'Inactive' }}</span>
+      <span class="actions">
+        <button type="button" (click)="toggleActive(exam)" [disabled]="saving()">
+          {{ exam.is_active ? 'Deactivate' : 'Activate' }}
+        </button>
+        <button type="button" (click)="deleteExam(exam)" [disabled]="saving()">Delete</button>
+      </span>
+    </div>
+  </div>
+
+  <p *ngIf="!loading() && exams().length === 0">No exams configured for selected academic year.</p>
+
+  <ng-template #loadingTpl>
+    <p>Loading exam configuration...</p>
+  </ng-template>
+</div>
+

@@ -1,0 +1,287 @@
+<div class="dashboard" *ngIf="!isStudent()">
+  <div class="dashboard__header">
+    <h2>Dashboard</h2>
+    <p>Overview of academic, attendance, and finance operations.</p>
+  </div>
+
+  <div class="dashboard__grid">
+    <div class="card">
+      <h3>Students</h3>
+      <p>Manage student lifecycle and profiles.</p>
+    </div>
+    <div class="card">
+      <h3>Attendance</h3>
+      <p>Record and review attendance data.</p>
+    </div>
+    <div class="card">
+      <h3>Finance</h3>
+      <p>Track fees, payments, and reports.</p>
+    </div>
+    <div class="card">
+      <h3>Expenses</h3>
+      <p>Track operational expenses with append-only and reversal flow.</p>
+    </div>
+  </div>
+
+  <section class="staff-tools">
+    <article class="tool-card">
+      <h3>Notifications</h3>
+      <p class="muted" *ngIf="notifications().length === 0">No new notifications.</p>
+      <ul class="notification-list" *ngIf="notifications().length > 0">
+        <li *ngFor="let item of notifications()">
+          <strong>{{ item.title }}</strong>
+          <p>{{ item.message }}</p>
+        </li>
+      </ul>
+    </article>
+
+    <article class="tool-card">
+      <h3>Self Attendance</h3>
+      <p class="muted" *ngIf="selfAttendance()?.message">{{ selfAttendance()?.message }}</p>
+      <p class="muted" *ngIf="selfAttendance()?.session as session">
+        Punch In: {{ session.punch_in_at || '-' }} | Punch Out: {{ session.punch_out_at || '-' }}
+      </p>
+
+      <div class="camera-box">
+        <video #cameraVideo autoplay muted playsinline></video>
+        <canvas #cameraCanvas class="hidden-canvas"></canvas>
+      </div>
+
+      <div class="camera-actions">
+        <button type="button" (click)="startCamera()">Start Camera</button>
+        <button type="button" (click)="captureSelfie()" [disabled]="!cameraReady()">Capture</button>
+        <button type="button" (click)="clearCapturedSelfie()" [disabled]="!capturePreview()">Clear</button>
+      </div>
+
+      <p class="error" *ngIf="cameraError()">{{ cameraError() }}</p>
+
+      <div *ngIf="capturePreview()" class="captured-preview">
+        <img [src]="capturePreview()" alt="Captured selfie" />
+      </div>
+
+      <div class="camera-actions">
+        <button
+          type="button"
+          (click)="markSelfAttendance('in')"
+          [disabled]="actionBusy() || !selfAttendance()?.can_mark || !selfAttendance()?.can_punch_in"
+        >
+          Punch In
+        </button>
+        <button
+          type="button"
+          (click)="markSelfAttendance('out')"
+          [disabled]="actionBusy() || !selfAttendance()?.can_mark || !selfAttendance()?.can_punch_out"
+        >
+          Punch Out
+        </button>
+      </div>
+
+      <h4>Attendance Images</h4>
+      <p class="muted">Double-click image to expand.</p>
+      <div class="image-grid">
+        <button
+          type="button"
+          class="image-thumb"
+          *ngFor="let event of selfAttendance()?.recent_events || []"
+          (dblclick)="openViewer(event.selfie_url)"
+          [disabled]="!event.selfie_url"
+        >
+          <img *ngIf="event.selfie_url" [src]="event.selfie_url" [alt]="'Attendance ' + event.punch_type" />
+          <span *ngIf="!event.selfie_url">No image</span>
+        </button>
+      </div>
+    </article>
+  </section>
+</div>
+
+<div class="student-dashboard" *ngIf="isStudent()">
+  <header class="student-dashboard__hero">
+    <div>
+      <h2>Welcome, {{ data()?.profile_summary?.full_name || 'Student' }}</h2>
+      <p class="muted">Academic year-scoped student dashboard</p>
+    </div>
+
+    <form class="filters" [formGroup]="filters" (ngSubmit)="reload()">
+      <label>
+        <span>Academic Year</span>
+        <select formControlName="academic_year_id">
+          <option value="">Auto</option>
+          <option *ngFor="let year of yearOptions()" [value]="year.id">{{ year.name }}</option>
+        </select>
+      </label>
+
+      <label>
+        <span>Month</span>
+        <input type="month" formControlName="month" />
+      </label>
+
+      <button type="submit" [disabled]="loading()">Apply</button>
+    </form>
+  </header>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <section class="stats" *ngIf="data() as vm">
+    <article class="stat-card">
+      <h3>Attendance %</h3>
+      <strong>{{ vm.quick_stats.attendance_percent | number : '1.0-2' }}</strong>
+    </article>
+    <article class="stat-card">
+      <h3>Pending Fee</h3>
+      <strong>{{ vm.quick_stats.pending_fee | number : '1.0-2' }}</strong>
+    </article>
+    <article class="stat-card">
+      <h3>Upcoming Exam</h3>
+      <strong>{{ vm.quick_stats.upcoming_exam || 'N/A' }}</strong>
+    </article>
+    <article class="stat-card">
+      <h3>Assignments Due</h3>
+      <strong>{{ vm.quick_stats.assignments_due }}</strong>
+    </article>
+  </section>
+
+  <section class="panel" *ngIf="data() as vm">
+    <h3>Profile Summary</h3>
+    <div class="key-grid">
+      <p><span>Admission No:</span> {{ vm.profile_summary.admission_number || '-' }}</p>
+      <p><span>Roll No:</span> {{ vm.profile_summary.roll_number || '-' }}</p>
+      <p><span>Class:</span> {{ vm.profile_summary.class || '-' }}</p>
+      <p><span>Section:</span> {{ vm.profile_summary.section || '-' }}</p>
+      <p><span>Academic Year:</span> {{ vm.profile_summary.academic_year || '-' }}</p>
+      <p><span>Blood Group:</span> {{ vm.profile_summary.blood_group || '-' }}</p>
+    </div>
+  </section>
+
+  <section class="panel" *ngIf="data() as vm">
+    <h3>Academic Overview</h3>
+    <div class="key-grid">
+      <p><span>Current Year:</span> {{ vm.academic_overview.current_academic_year || '-' }}</p>
+      <p><span>Current Term:</span> {{ vm.academic_overview.current_term || '-' }}</p>
+      <p><span>Academic Status:</span> {{ vm.academic_overview.academic_status || '-' }}</p>
+      <p><span>Upcoming Exam:</span> {{ vm.academic_overview.upcoming_exam.name || '-' }}</p>
+    </div>
+  </section>
+
+  <section class="panel" *ngIf="data() as vm">
+    <h3>Attendance Overview</h3>
+    <ng-container *ngIf="widgetEnabled('attendance'); else noAttendancePerm">
+      <div class="key-grid">
+        <p><span>Month:</span> {{ vm.attendance_overview.month }}</p>
+        <p><span>Present:</span> {{ vm.attendance_overview.total_present }}</p>
+        <p><span>Absent:</span> {{ vm.attendance_overview.total_absent }}</p>
+        <p><span>Leave:</span> {{ vm.attendance_overview.total_leave }}</p>
+      </div>
+    </ng-container>
+    <ng-template #noAttendancePerm>
+      <p class="muted">Attendance widget not enabled for your account.</p>
+    </ng-template>
+  </section>
+
+  <section class="panel" *ngIf="data() as vm">
+    <h3>Results</h3>
+    <ng-container *ngIf="widgetEnabled('results'); else noResultsPerm">
+      <p *ngIf="vm.result_section.state !== 'available'" class="muted">{{ vm.result_section.message }}</p>
+      <div *ngIf="vm.result_section.state === 'available' && vm.result_section.latest_result as r" class="key-grid">
+        <p><span>Exam:</span> {{ r.exam_name || '-' }}</p>
+        <p><span>Grade:</span> {{ r.grade || '-' }}</p>
+        <p><span>Percentage:</span> {{ r.percentage | number : '1.0-2' }}</p>
+        <p><span>Published At:</span> {{ r.published_at || '-' }}</p>
+      </div>
+    </ng-container>
+    <ng-template #noResultsPerm>
+      <p class="muted">Result widget not enabled for your account.</p>
+    </ng-template>
+  </section>
+
+  <section class="panel" *ngIf="data() as vm">
+    <h3>Fee Summary</h3>
+    <ng-container *ngIf="widgetEnabled('fee'); else noFeePerm">
+      <div class="key-grid">
+        <p><span>Total Fee:</span> {{ vm.fee_summary.total_fee | number : '1.0-2' }}</p>
+        <p><span>Paid:</span> {{ vm.fee_summary.paid_amount | number : '1.0-2' }}</p>
+        <p><span>Pending:</span> {{ vm.fee_summary.pending_amount | number : '1.0-2' }}</p>
+        <p><span>Last Payment Date:</span> {{ vm.fee_summary.last_payment_date || '-' }}</p>
+      </div>
+    </ng-container>
+    <ng-template #noFeePerm>
+      <p class="muted">Fee widget not enabled for your account.</p>
+    </ng-template>
+  </section>
+
+  <section class="panel" *ngIf="data() as vm">
+    <h3>Admit Card</h3>
+    <ng-container *ngIf="widgetEnabled('admit_card'); else noAdmitPerm">
+      <div class="key-grid">
+        <p><span>Status:</span> {{ vm.admit_card.status }}</p>
+        <p><span>Exam:</span> {{ vm.admit_card.exam_name || '-' }}</p>
+        <p><span>Message:</span> {{ vm.admit_card.message || '-' }}</p>
+      </div>
+    </ng-container>
+    <ng-template #noAdmitPerm>
+      <p class="muted">Admit card widget not enabled for your account.</p>
+    </ng-template>
+  </section>
+
+  <section class="split" *ngIf="data() as vm">
+    <article class="panel">
+      <h3>Notice Board</h3>
+      <p class="muted" *ngIf="vm.notice_board.items.length === 0">No active notices.</p>
+      <ul *ngIf="vm.notice_board.items.length > 0">
+        <li *ngFor="let item of vm.notice_board.items">{{ item.title }}</li>
+      </ul>
+    </article>
+
+    <article class="panel">
+      <h3>Assignments</h3>
+      <p class="muted" *ngIf="vm.assignments.items.length === 0">No assignments available.</p>
+      <ul *ngIf="vm.assignments.items.length > 0">
+        <li *ngFor="let item of vm.assignments.items">{{ item.subject }} - {{ item.title }}</li>
+      </ul>
+    </article>
+
+    <article class="panel">
+      <h3>Timetable</h3>
+      <p class="muted" *ngIf="vm.timetable.items.length === 0">No timetable rows available.</p>
+      <ul *ngIf="vm.timetable.items.length > 0">
+        <li *ngFor="let item of vm.timetable.items">{{ item.day }} {{ item.period }} - {{ item.subject }}</li>
+      </ul>
+    </article>
+  </section>
+
+  <section class="panel options-panel" *ngIf="data() as vm">
+    <h3>Student Options</h3>
+    <div class="options-grid">
+      <a routerLink="/student/admit-card" class="option-tile" [class.option-tile--disabled]="!widgetEnabled('admit_card')">
+        <span class="option-title">Admit Card</span>
+        <span class="option-sub">Exam card and download status</span>
+      </a>
+      <a routerLink="/student/fee" class="option-tile" [class.option-tile--disabled]="!widgetEnabled('fee')">
+        <span class="option-title">Fee</span>
+        <span class="option-sub">Summary, pending amount, receipts</span>
+      </a>
+      <a routerLink="/student/result" class="option-tile" [class.option-tile--disabled]="!widgetEnabled('results')">
+        <span class="option-title">Result</span>
+        <span class="option-sub">Published result and status</span>
+      </a>
+      <a routerLink="/student/timetable" class="option-tile" [class.option-tile--disabled]="!widgetEnabled('timetable')">
+        <span class="option-title">Timetable</span>
+        <span class="option-sub">Weekly periods and teachers</span>
+      </a>
+      <a routerLink="/student/academic-history" class="option-tile">
+        <span class="option-title">Academic History</span>
+        <span class="option-sub">Year-wise record and progression</span>
+      </a>
+      <a routerLink="/student/attendance-history" class="option-tile" [class.option-tile--disabled]="!widgetEnabled('attendance')">
+        <span class="option-title">Attendance History</span>
+        <span class="option-sub">Daily/monthly attendance records</span>
+      </a>
+    </div>
+  </section>
+</div>
+
+<div class="image-viewer" *ngIf="viewerImage()" (dblclick)="closeViewer()">
+  <div class="image-viewer__content">
+    <img [src]="viewerImage()" alt="Attendance image preview" />
+    <button type="button" (click)="closeViewer()">Close</button>
+  </div>
+</div>

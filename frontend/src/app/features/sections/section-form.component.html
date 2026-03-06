@@ -1,0 +1,60 @@
+<div class="form" *ngIf="!loading(); else loadingTpl">
+  <div class="form__header">
+    <h2>{{ isEdit() ? 'Edit Section' : 'New Section' }}</h2>
+    <p>Sections are unique per class and academic year.</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" class="form__grid">
+    <label>
+      <span>Class *</span>
+      <select formControlName="class_id">
+        <option value="">Select class</option>
+        <option *ngFor="let clazz of classes()" [value]="clazz.id">
+          {{ clazz.name }}
+        </option>
+      </select>
+    </label>
+    <label>
+      <span>Academic Year *</span>
+      <select formControlName="academic_year_id">
+        <option value="">Select year</option>
+        <option *ngFor="let year of academicYears()" [value]="year.id">
+          {{ year.name }}
+        </option>
+      </select>
+    </label>
+    <label>
+      <span>Section Name *</span>
+      <input formControlName="name" />
+    </label>
+    <label>
+      <span>Capacity</span>
+      <input formControlName="capacity" type="number" />
+    </label>
+    <label>
+      <span>Class Teacher ID</span>
+      <input formControlName="class_teacher_id" type="number" />
+    </label>
+    <label>
+      <span>Room Number</span>
+      <input formControlName="room_number" />
+    </label>
+    <label>
+      <span>Status</span>
+      <select formControlName="status">
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
+    </label>
+
+    <div class="span-2">
+      <button type="submit">{{ isEdit() ? 'Save Changes' : 'Create Section' }}</button>
+    </div>
+  </form>
+</div>
+
+<ng-template #loadingTpl>
+  <p>Loading...</p>
+</ng-template>

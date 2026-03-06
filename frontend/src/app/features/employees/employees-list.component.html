@@ -1,0 +1,63 @@
+<div class="employees">
+  <div class="employees__header">
+    <div>
+      <h2>Manage Employees</h2>
+      <p>Manage employee profiles, roles, and long-term documents.</p>
+    </div>
+    <a routerLink="/employees/new" class="primary">Add Employee</a>
+  </div>
+
+  <form [formGroup]="filters" (ngSubmit)="applyFilters()" class="employees__filters">
+    <input type="text" formControlName="search" placeholder="Search by employee ID, name, email, PAN" />
+    <select formControlName="role">
+      <option value="">All roles</option>
+      <option *ngFor="let role of metadata()?.roles || []" [value]="role">{{ role }}</option>
+    </select>
+    <select formControlName="employee_type">
+      <option value="">All types</option>
+      <option *ngFor="let type of metadata()?.employee_types || []" [value]="type">{{ type }}</option>
+    </select>
+    <select formControlName="status">
+      <option value="">All statuses</option>
+      <option *ngFor="let status of metadata()?.statuses || []" [value]="status">{{ status }}</option>
+    </select>
+    <button type="submit">Filter</button>
+  </form>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <div class="table" *ngIf="!loading(); else loadingTpl">
+    <div class="table__row table__row--head">
+      <span>Employee ID</span>
+      <span>Name</span>
+      <span>Role</span>
+      <span>Type</span>
+      <span>Designation</span>
+      <span>Status</span>
+      <span>Actions</span>
+    </div>
+    <div class="table__row" *ngFor="let employee of employees()">
+      <span>{{ employee.employee_id }}</span>
+      <span>{{ employeeName(employee) }}</span>
+      <span>{{ employee.user?.role || '-' }}</span>
+      <span>{{ employee.employee_type }}</span>
+      <span>{{ employee.designation || '-' }}</span>
+      <span>{{ employee.status }}</span>
+      <span class="actions">
+        <a [routerLink]="['/employees', employee.id]">View</a>
+        <a [routerLink]="['/employees', employee.id, 'edit']">Edit</a>
+      </span>
+    </div>
+  </div>
+
+  <ng-template #loadingTpl>
+    <p>Loading employees...</p>
+  </ng-template>
+
+  <div class="pagination">
+    <button type="button" (click)="previousPage()">Previous</button>
+    <span>Page {{ pagination().current_page }} of {{ pagination().last_page }}</span>
+    <button type="button" (click)="nextPage()">Next</button>
+  </div>
+</div>
+

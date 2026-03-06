@@ -1,0 +1,173 @@
+<div class="detail" *ngIf="!loading(); else loadingTpl">
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+
+  <div *ngIf="enrollment() as e">
+
+
+    <div class="detail__header">
+      <div>
+        <h2>{{ e.student?.user?.full_name }}</h2>
+        <p>Enrollment #{{ e.id }} | Status: {{ e.status }}</p>
+      </div>
+      <div class="detail__actions">
+        <a class="primary" [routerLink]="['/enrollments', e.id, 'edit']">Edit</a>
+      </div>
+    </div>
+
+    <div class="detail__grid">
+      <div class="card">
+        <h3>Enrollment Details</h3>
+        <p><strong>Academic Year:</strong> {{ e.academicYear?.name }}</p>
+        <p><strong>Current Class / Section:</strong> {{ getCurrentClassSection(e) }}</p>
+        <p *ngIf="getPromotedFromClassSection(e) !== '-'">
+          <strong>Promoted From:</strong> {{ getPromotedFromClassSection(e) }}
+        </p>
+        <p *ngIf="getPromotedToClassSection(e) !== '-'">
+          <strong>Promoted To:</strong> {{ getPromotedToClassSection(e) }}
+        </p>
+        <p><strong>Roll #:</strong> {{ e.roll_number || '-' }}</p>
+        <p><strong>Enrollment Date:</strong> {{ e.enrollment_date }}</p>
+        <p><strong>Locked:</strong> {{ e.is_locked ? 'Yes' : 'No' }}</p>
+      </div>
+
+      <div class="card">
+        <h3>Ledger (Calculated)</h3>
+        <div *ngIf="ledgerBalance() as bal; else noBalance">
+          <p><strong>Debits:</strong> {{ bal.debits }}</p>
+          <p><strong>Credits:</strong> {{ bal.credits }}</p>
+          <p><strong>Balance:</strong> {{ bal.balance }}</p>
+        </div>
+        <ng-template #noBalance>
+          <p>-</p>
+        </ng-template>
+
+        <div class="history" *ngIf="ledgerEntries().length">
+          <div class="history__row history__row--head history__row--ledger">
+            <span>ID</span>
+            <span>Type</span>
+            <span>Ref</span>
+            <span>Amount</span>
+            <span>Posted</span>
+          </div>
+          <div class="history__row history__row--ledger" *ngFor="let row of ledgerEntries()">
+            <span>#{{ row.id }}</span>
+            <span>{{ row.transaction_type }}</span>
+            <span>{{ row.reference_type }} {{ row.reference_id ? ('#' + row.reference_id) : '' }}</span>
+            <span>{{ row.amount }}</span>
+            <span>{{ row.posted_at || row.created_at }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Transport</h3>
+        <div *ngIf="transportCharge() as tc">
+          <p><strong>Assigned:</strong> {{ tc.has_transport ? 'Yes' : 'No' }}</p>
+          <p><strong>Route:</strong> {{ tc.route?.route_name || '-' }}</p>
+          <p><strong>Stop:</strong> {{ tc.stop?.stop_name || '-' }}</p>
+          <p><strong>Monthly Amount:</strong> {{ tc.fee_amount || 0 }}</p>
+        </div>
+        <div class="history" *ngIf="transportAssignments().length">
+          <div class="history__row history__row--head history__row--transport">
+            <span>ID</span>
+            <span>Status</span>
+            <span>Route</span>
+            <span>Stop</span>
+            <span>Start</span>
+          </div>
+          <div class="history__row history__row--transport" *ngFor="let item of transportAssignments()">
+            <span>#{{ item.id }}</span>
+            <span>{{ item.status }}</span>
+            <span>{{ item.route?.route_name || item.route_id }}</span>
+            <span>{{ item.stop?.stop_name || item.stop_id }} ({{ item.stop?.fee_amount || 0 }})</span>
+            <span>{{ item.start_date }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Promotion / Repeat</h3>
+        <form [formGroup]="promoteForm" (ngSubmit)="promote()" class="stack">
+          <h4>Promote</h4>
+          <select formControlName="new_academic_year_id" (change)="onPromoteClassOrYearChange()">
+            <option value="">Select year</option>
+            <option *ngFor="let year of academicYears()" [value]="year.id">{{ year.name }}</option>
+          </select>
+          <select formControlName="new_class_id" (change)="onPromoteClassOrYearChange()">
+            <option value="">All classes</option>
+            <option *ngFor="let classItem of classes()" [value]="classItem.id">
+              {{ classItem.name }}
+            </option>
+          </select>
+          <select formControlName="new_section_id">
+            <option value="">Unassigned section</option>
+            <option *ngFor="let section of filteredPromoteSections()" [value]="section.id">
+              {{ section.class?.name }} - {{ section.name }}
+            </option>
+          </select>
+          <input formControlName="roll_number" type="number" placeholder="Roll number" />
+          <input formControlName="remarks" placeholder="Remarks" />
+          <button type="submit" [disabled]="actionLoading()">
+            {{ actionLoading() ? 'Processing...' : 'Promote' }}
+          </button>
+        </form>
+
+        <form [formGroup]="repeatForm" (ngSubmit)="repeat()" class="stack">
+          <h4>Repeat</h4>
+          <select formControlName="new_academic_year_id">
+            <option value="">Select year</option>
+            <option *ngFor="let year of academicYears()" [value]="year.id">{{ year.name }}</option>
+          </select>
+          <select formControlName="section_id">
+            <option value="">Unassigned section</option>
+            <option *ngFor="let section of sections()" [value]="section.id">
+              {{ section.class?.name }} - {{ section.name }}
+            </option>
+          </select>
+          <input formControlName="remarks" placeholder="Remarks" />
+          <button type="submit" [disabled]="actionLoading()">
+            {{ actionLoading() ? 'Processing...' : 'Repeat' }}
+          </button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>Transfer / TC</h3>
+        <form [formGroup]="transferForm" (ngSubmit)="transfer()" class="stack">
+          <input formControlName="transfer_date" type="date" />
+          <input formControlName="remarks" placeholder="Reason" />
+          <button type="submit" [disabled]="actionLoading()">
+            {{ actionLoading() ? 'Processing...' : 'Transfer Student' }}
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card" *ngIf="history() as history">
+      <h3>Academic History</h3>
+      <div class="history">
+        <div class="history__row history__row--head">
+          <span>Year</span>
+          <span>Class</span>
+          <span>Section</span>
+          <span>Status</span>
+          <span>Locked</span>
+        </div>
+        <div class="history__row" *ngFor="let item of history.history">
+          <span>{{ item.academic_year }}</span>
+          <span>{{ item.class }}</span>
+          <span>{{ item.section }}</span>
+          <span>{{ item.status }}</span>
+          <span>{{ item.is_locked ? 'Yes' : 'No' }}</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  
+</div>
+
+<ng-template #loadingTpl>
+  <p>Loading enrollment...</p>
+</ng-template>

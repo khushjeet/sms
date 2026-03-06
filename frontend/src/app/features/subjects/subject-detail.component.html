@@ -1,0 +1,124 @@
+<div class="subject-detail" *ngIf="!loading(); else loadingTpl">
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="success()">{{ success() }}</p>
+
+  <div *ngIf="subject() as item">
+    <div class="subject-detail__header">
+      <div>
+        <h2>{{ item.name }}</h2>
+        <p>Code: {{ item.subject_code || item.code }}</p>
+      </div>
+      <div class="subject-detail__actions">
+        <a class="secondary" routerLink="/subjects">Back</a>
+        <a *ngIf="canManage()" class="primary" [routerLink]="['/subjects', item.id, 'edit']">Edit Subject</a>
+      </div>
+    </div>
+
+    <div class="subject-detail__meta">
+      <div class="card">
+        <h3>Subject Detail</h3>
+        <p><strong>Short Name:</strong> {{ item.short_name || '-' }}</p>
+        <p><strong>Type:</strong> {{ item.type || '-' }}</p>
+        <p><strong>Status:</strong> {{ item.status || '-' }}</p>
+        <p><strong>Credits:</strong> {{ item.credits ?? '-' }}</p>
+      </div>
+
+      <div class="card">
+        <h3>Durable Codes</h3>
+        <p><strong>Board:</strong> {{ item.board_code || '-' }}</p>
+        <p><strong>LMS:</strong> {{ item.lms_code || '-' }}</p>
+        <p><strong>ERP:</strong> {{ item.erp_code || '-' }}</p>
+      </div>
+    </div>
+
+    <div class="card" *ngIf="canManage()">
+      <h3>Subject Classes Mapping</h3>
+      <form [formGroup]="form" (ngSubmit)="saveMapping()" class="mapping-form">
+        <label>
+          Class
+          <select formControlName="class_id">
+            <option value="">Select class</option>
+            <option *ngFor="let cls of classes()" [value]="cls.id">{{ cls.name }}</option>
+          </select>
+        </label>
+
+        <label>
+          Academic Year
+          <select formControlName="academic_year_id" (change)="onAcademicYearChange($any($event.target).value)">
+            <option value="">Select academic year</option>
+            <option *ngFor="let year of academicYears()" [value]="year.id">
+              {{ year.name }}{{ year.is_current ? ' (Current)' : '' }}
+            </option>
+          </select>
+        </label>
+
+        <label>
+          Exam Configuration
+          <select formControlName="academic_year_exam_config_id">
+            <option value="">Select exam</option>
+            <option *ngFor="let exam of examConfigurations()" [value]="exam.id">
+              {{ exam.sequence }}. {{ exam.name }}
+            </option>
+          </select>
+        </label>
+
+        <label>
+          Max Marks
+          <input type="number" formControlName="max_marks" min="1" max="1000" />
+        </label>
+
+        <label>
+          Pass Marks
+          <input type="number" formControlName="pass_marks" min="0" max="1000" />
+        </label>
+
+        <label>
+          Mandatory
+          <select formControlName="is_mandatory">
+            <option [ngValue]="true">Yes</option>
+            <option [ngValue]="false">No</option>
+          </select>
+        </label>
+
+        <button type="submit" class="primary" [disabled]="saving()">
+          {{ saving() ? 'Saving...' : 'Save Mapping' }}
+        </button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3>Current Mappings</h3>
+      <p *ngIf="(item.classes || []).length === 0">No class mappings yet.</p>
+      <div class="table" *ngIf="(item.classes || []).length > 0">
+        <div class="table__row table__row--head">
+          <span>Academic Year</span>
+          <span>Exam</span>
+          <span>Class</span>
+          <span>Max</span>
+          <span>Pass</span>
+          <span>Mandatory</span>
+          <span>Actions</span>
+        </div>
+        <div class="table__row" *ngFor="let mapping of item.classes">
+          <span>{{ yearLabel(mapping.pivot.academic_year_id) }}</span>
+          <span>{{ mapping.pivot.academic_year_exam_config_name || ('ID #' + (mapping.pivot.academic_year_exam_config_id || '-')) }}</span>
+          <span>{{ mapping.name }}</span>
+          <span>{{ mapping.pivot.max_marks }}</span>
+          <span>{{ mapping.pivot.pass_marks }}</span>
+          <span>{{ mapping.pivot.is_mandatory ? 'Yes' : 'No' }}</span>
+          <span class="actions" *ngIf="canManage()">
+            <button type="button" class="secondary-btn" (click)="beginEditMapping(mapping)">Edit</button>
+            <button type="button" class="danger" [disabled]="saving()" (click)="removeMapping(mapping.id, mapping.pivot.academic_year_id)">
+              Remove
+            </button>
+          </span>
+          <span *ngIf="!canManage()">-</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<ng-template #loadingTpl>
+  <p>Loading subject detail...</p>
+</ng-template>

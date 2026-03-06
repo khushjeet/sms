@@ -1,0 +1,105 @@
+<div class="assignments">
+  <div class="assignments__header">
+    <div>
+      <h2>Subject Class Assignment</h2>
+      <p>Assign subjects to classes per academic year with durable rules.</p>
+    </div>
+    <a routerLink="/subjects" class="secondary">Back to Subjects</a>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="success()">{{ success() }}</p>
+
+  <div class="card">
+    <label for="subject_id">Subject</label>
+    <select id="subject_id" [value]="form.getRawValue().subject_id" (change)="onSubjectChange($any($event.target).value)">
+      <option value="">Select subject</option>
+      <option *ngFor="let s of subjects()" [value]="s.id">{{ s.name }} ({{ s.subject_code || s.code }})</option>
+    </select>
+  </div>
+
+  <div class="card" *ngIf="selectedSubject() as subject">
+    <h3>{{ subject.name }} - Assignment Form</h3>
+    <form [formGroup]="form" (ngSubmit)="saveAssignment()" class="mapping-form">
+      <label>
+        Class
+        <select formControlName="class_id">
+          <option value="">Select class</option>
+          <option *ngFor="let cls of classes()" [value]="cls.id">{{ cls.name }}</option>
+        </select>
+      </label>
+
+      <label>
+        Academic Year
+        <select formControlName="academic_year_id" (change)="onAcademicYearChange($any($event.target).value)">
+          <option value="">Select year</option>
+          <option *ngFor="let y of academicYears()" [value]="y.id">{{ y.name }}{{ y.is_current ? ' (Current)' : '' }}</option>
+        </select>
+      </label>
+
+      <label>
+        Exam Configuration
+        <select formControlName="academic_year_exam_config_id">
+          <option value="">Select exam</option>
+          <option *ngFor="let exam of examConfigurations()" [value]="exam.id">
+            {{ exam.sequence }}. {{ exam.name }}
+          </option>
+        </select>
+      </label>
+
+      <label>
+        Max Marks
+        <input type="number" formControlName="max_marks" min="1" max="1000" />
+      </label>
+
+      <label>
+        Pass Marks
+        <input type="number" formControlName="pass_marks" min="0" max="1000" />
+      </label>
+
+      <label>
+        Mandatory
+        <select formControlName="is_mandatory">
+          <option [ngValue]="true">Yes</option>
+          <option [ngValue]="false">No</option>
+        </select>
+      </label>
+
+      <button type="submit" class="primary" [disabled]="saving()">
+        {{ saving() ? 'Saving...' : 'Save Assignment' }}
+      </button>
+    </form>
+  </div>
+
+  <div class="card" *ngIf="selectedSubject() as subject">
+    <h3>Current Assignments</h3>
+    <p *ngIf="(subject.classes || []).length === 0">No assignments yet.</p>
+    <div class="table" *ngIf="(subject.classes || []).length > 0">
+      <div class="table__row table__row--head">
+        <span>Year</span>
+        <span>Exam</span>
+        <span>Class</span>
+        <span>Max</span>
+        <span>Pass</span>
+        <span>Mandatory</span>
+        <span>Actions</span>
+      </div>
+      <div class="table__row" *ngFor="let mapping of subject.classes">
+        <span>{{ yearLabel(mapping.pivot.academic_year_id) }}</span>
+        <span>{{ mapping.pivot.academic_year_exam_config_name || ('ID #' + (mapping.pivot.academic_year_exam_config_id || '-')) }}</span>
+        <span>{{ mapping.name }}</span>
+        <span>{{ mapping.pivot.max_marks }}</span>
+        <span>{{ mapping.pivot.pass_marks }}</span>
+        <span>{{ mapping.pivot.is_mandatory ? 'Yes' : 'No' }}</span>
+        <span class="actions">
+          <button type="button" class="secondary-btn" (click)="editAssignment(mapping)">Edit</button>
+          <button type="button" class="danger" (click)="removeAssignment(mapping.id, mapping.pivot.academic_year_id)">
+            Remove
+          </button>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <p *ngIf="loading()">Loading...</p>
+</div>

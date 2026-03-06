@@ -1,0 +1,75 @@
+<div class="form" *ngIf="!loading(); else loadingTpl">
+  <div class="form__header">
+    <h2>{{ isEdit() ? 'Edit Subject' : 'New Subject' }}</h2>
+    <p>Create stable subject records for long-term academic and reporting continuity.</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" class="form__grid">
+    <label>
+      <span>Name *</span>
+      <input formControlName="name" />
+    </label>
+    <label>
+      <span>Subject Code *</span>
+      <input formControlName="subject_code" />
+    </label>
+    <label>
+      <span>Short Name</span>
+      <input formControlName="short_name" />
+    </label>
+    <label>
+      <span>Type</span>
+      <select formControlName="type">
+        <option value="core">Core</option>
+        <option value="elective">Elective</option>
+        <option value="optional">Optional</option>
+      </select>
+    </label>
+    <label>
+      <span>Status</span>
+      <select formControlName="status">
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
+    </label>
+    <label>
+      <span>Credits</span>
+      <input formControlName="credits" type="number" min="0" />
+    </label>
+    <label>
+      <span>Effective From</span>
+      <input formControlName="effective_from" type="date" />
+    </label>
+    <label>
+      <span>Effective To</span>
+      <input formControlName="effective_to" type="date" />
+    </label>
+    <label>
+      <span>Board Code</span>
+      <input formControlName="board_code" />
+    </label>
+    <label>
+      <span>LMS Code</span>
+      <input formControlName="lms_code" />
+    </label>
+    <label>
+      <span>ERP Code</span>
+      <input formControlName="erp_code" />
+    </label>
+    <label class="span-2">
+      <span>Description</span>
+      <textarea formControlName="description" rows="3"></textarea>
+    </label>
+
+    <div class="span-2">
+      <button type="submit">{{ isEdit() ? 'Save Changes' : 'Create Subject' }}</button>
+    </div>
+  </form>
+</div>
+
+<ng-template #loadingTpl>
+  <p>Loading...</p>
+</ng-template>
+

@@ -1,0 +1,39 @@
+<div class="years">
+  <div class="years__header">
+    <div>
+      <h2>Academic Years</h2>
+      <p>Manage academic year transitions and lock periods.</p>
+    </div>
+    <a routerLink="/academic-years/new" class="primary">Add Academic Year</a>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <div class="table" *ngIf="!loading(); else loadingTpl">
+    <div class="table__row table__row--head">
+      <span>Name</span>
+      <span>Start</span>
+      <span>End</span>
+      <span>Status</span>
+      <span>Current</span>
+      <span>Actions</span>
+    </div>
+    <div class="table__row" *ngFor="let year of years()">
+      <span>{{ year.name }}</span>
+      <span>{{ year.start_date }}</span>
+      <span>{{ year.end_date }}</span>
+      <span>{{ year.status }}</span>
+      <span>{{ year.is_current ? 'Yes' : 'No' }}</span>
+      <span class="actions">
+        <a [routerLink]="['/academic-years', year.id, 'edit']">Edit</a>
+        <button type="button" (click)="setCurrent(year.id)">Set Current</button>
+        <button type="button" (click)="closeYear(year.id)">Close</button>
+        <button type="button" (click)="deleteYear(year.id)">Delete</button>
+      </span>
+    </div>
+  </div>
+
+  <ng-template #loadingTpl>
+    <p>Loading academic years...</p>
+  </ng-template>
+</div>

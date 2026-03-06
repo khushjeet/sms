@@ -1,0 +1,49 @@
+<div class="marks">
+  <div class="marks__header">
+    <h2>Assign Marks</h2>
+    <p>Enter subject-wise marks only for students in your allotted assignments.</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="message()">{{ message() }}</p>
+
+  <div class="form">
+    <select [ngModel]="assignmentId()" (ngModelChange)="onAssignmentChange($event)">
+      <option value="">Select allotted subject</option>
+      <option *ngFor="let assignment of assignments()" [value]="assignment.id">
+        {{ assignment.class_name }} - {{ assignment.section_name }} - {{ assignment.subject_name }} - {{ assignment.mapped_exam_configuration_name || 'Exam Not Mapped' }}
+      </option>
+    </select>
+    <input type="date" [ngModel]="markedOn()" (ngModelChange)="markedOn.set($event)" />
+    <button type="button" (click)="loadSheet()" [disabled]="loading()">{{ loading() ? 'Loading...' : 'Load' }}</button>
+    <button type="button" (click)="save()" [disabled]="saving() || loading()">{{ saving() ? 'Saving...' : 'Save Marks' }}</button>
+  </div>
+
+  <p *ngIf="selectedAssignment() as selected">
+    Subject: <strong>{{ selected.subject_name }}</strong> |
+    Class: <strong>{{ selected.class_name }}</strong> |
+    Section: <strong>{{ selected.section_name }}</strong> |
+    Academic Year: <strong>{{ selected.academic_year_name }}</strong> |
+    Exam: <strong>{{ selected.mapped_exam_configuration_name || 'Not Mapped' }}</strong> |
+    Default Max: <strong>{{ selected.mapped_max_marks ?? 100 }}</strong>
+  </p>
+
+  <div class="table" *ngIf="rows().length > 0">
+    <div class="table__row table__row--head">
+      <span>Roll #</span>
+      <span>Student</span>
+      <span>Marks</span>
+      <span>Max</span>
+      <span>Remarks</span>
+    </div>
+    <div class="table__row" *ngFor="let row of rows()">
+      <span>{{ row.roll_number || '-' }}</span>
+      <span>{{ row.student_name || '-' }}</span>
+      <span><input type="number" min="0" [ngModel]="row.marks_obtained" (ngModelChange)="row.marks_obtained = parseNullableNumber($event); onRowChange()" /></span>
+      <span><input type="number" min="1" [ngModel]="row.max_marks" (ngModelChange)="row.max_marks = parseNullableNumber($event); onRowChange()" /></span>
+      <span><input [ngModel]="row.remarks" (ngModelChange)="row.remarks = $event; onRowChange()" placeholder="Remarks" /></span>
+    </div>
+  </div>
+
+  <p *ngIf="!loading() && assignments().length === 0">No subject assignment found for your account.</p>
+</div>
