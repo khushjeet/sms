@@ -284,9 +284,9 @@ class ExpenseController extends Controller
                 ])
                 ->values();
         } else {
-            $format = $groupBy === 'year' ? '%Y' : '%Y-%m';
+            $formatExpression = $this->buildTrendBucketExpression($groupBy);
             $trend = (clone $base)
-                ->selectRaw("DATE_FORMAT(expense_date, '{$format}') as bucket")
+                ->selectRaw($formatExpression . ' as bucket')
                 ->selectRaw('SUM(CASE WHEN is_reversal = 0 THEN amount ELSE 0 END) as total_expense')
                 ->selectRaw('SUM(CASE WHEN is_reversal = 1 THEN amount ELSE 0 END) as total_reversed')
                 ->groupBy('bucket')
@@ -343,6 +343,20 @@ class ExpenseController extends Controller
             'report_fingerprint' => hash('sha256', json_encode($snapshot)),
             'generated_at' => now()->toIso8601String(),
         ]);
+    }
+
+    private function buildTrendBucketExpression(string $groupBy): string
+    {
+        $isYear = $groupBy === 'year';
+
+        return match (DB::getDriverName()) {
+            'sqlite' => $isYear
+                ? "strftime('%Y', expense_date)"
+                : "strftime('%Y-%m', expense_date)",
+            default => $isYear
+                ? "DATE_FORMAT(expense_date, '%Y')"
+                : "DATE_FORMAT(expense_date, '%Y-%m')",
+        };
     }
 
     public function downloadEntries(Request $request)

@@ -1,0 +1,85 @@
+<section class="audit-downloads">
+  <div class="audit-downloads__header">
+    <h2>Audit & Downloads Center</h2>
+    <p>Track exports and jump into the core academic and finance download workflows.</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="message()">{{ message() }}</p>
+  <p class="empty" *ngIf="loading()">Loading audit catalog...</p>
+
+  <div class="audit-downloads__grid" *ngIf="!loading()">
+    <article class="card" *ngFor="let module of modules()">
+      <h3>{{ module.title }}</h3>
+      <p>{{ module.description }}</p>
+      <p><strong>Available items:</strong> {{ module.available_items }}</p>
+      <p><strong>Recent downloads:</strong> {{ module.recent_downloads }}</p>
+      <p><strong>Formats:</strong> {{ module.available_formats.join(', ').toUpperCase() }}</p>
+      <div class="chips">
+        <span class="chip" *ngFor="let report of module.reports">
+          {{ report.label }} ({{ report.formats.join(', ').toUpperCase() }})
+        </span>
+      </div>
+      <button type="button" (click)="openModule(module.route)">Open module</button>
+    </article>
+  </div>
+
+  <article class="panel">
+    <div class="panel__header">
+      <h3>Recent Download Log</h3>
+      <div class="panel__actions">
+        <span *ngIf="loadingLogs()">Refreshing...</span>
+        <button type="button" class="ghost" (click)="exportCsv()" [disabled]="exportingCsv() || exportingArchive()">
+          {{ exportingCsv() ? 'Preparing CSV...' : 'Download CSV' }}
+        </button>
+        <button type="button" class="ghost" (click)="exportArchive()" [disabled]="exportingArchive() || exportingCsv()">
+          {{ exportingArchive() ? 'Preparing Archive...' : 'Download Archive' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="filters">
+      <select [ngModel]="moduleFilter()" (ngModelChange)="moduleFilter.set($event)">
+        <option value="">All modules</option>
+        <option *ngFor="let module of modules()" [value]="module.module">{{ module.title }}</option>
+      </select>
+      <input type="text" [ngModel]="reportKeyFilter()" (ngModelChange)="reportKeyFilter.set($event)" placeholder="Report key" />
+      <select [ngModel]="formatFilter()" (ngModelChange)="formatFilter.set($event)">
+        <option value="">All formats</option>
+        <option value="csv">CSV</option>
+        <option value="pdf">PDF</option>
+        <option value="zip">ZIP</option>
+      </select>
+      <input type="date" [ngModel]="dateFrom()" (ngModelChange)="dateFrom.set($event)" />
+      <input type="date" [ngModel]="dateTo()" (ngModelChange)="dateTo.set($event)" />
+      <input type="text" [ngModel]="searchFilter()" (ngModelChange)="searchFilter.set($event)" placeholder="Search report, file, module" />
+      <button type="button" (click)="applyFilters()">Apply</button>
+      <button type="button" class="ghost" (click)="clearFilters()">Clear</button>
+    </div>
+
+    <div class="table" *ngIf="logs().length > 0">
+      <div class="table__row table__row--head">
+        <span>When</span>
+        <span>Module</span>
+        <span>Report</span>
+        <span>Format</span>
+        <span>User</span>
+        <span>Checksum</span>
+        <span>Rows</span>
+        <span>File</span>
+      </div>
+      <div class="table__row" *ngFor="let log of logs()">
+        <span>{{ log.downloaded_at | date:'medium' }}</span>
+        <span>{{ log.module | titlecase }}</span>
+        <span>{{ log.report_label }}</span>
+        <span>{{ log.format.toUpperCase() }}</span>
+        <span>{{ [log.user?.first_name, log.user?.last_name].join(' ').trim() || log.user?.email || '-' }}</span>
+        <span>{{ checksumFor(log) }}</span>
+        <span>{{ log.row_count ?? '-' }}</span>
+        <span>{{ log.file_name || '-' }}</span>
+      </div>
+    </div>
+
+    <p class="empty" *ngIf="!loadingLogs() && logs().length === 0">No downloads recorded yet.</p>
+  </article>
+</section>

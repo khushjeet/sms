@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Staff;
 use App\Models\TeacherDocument;
 use App\Models\User;
+use App\Services\Email\EventNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -141,6 +142,12 @@ class EmployeeController extends Controller
 
             $this->storeDocuments($request, $staff);
 
+            DB::afterCommit(function () use ($staff) {
+                app(EventNotificationService::class)->notifyEmployeeProfileCreated(
+                    $staff->fresh(['user'])
+                );
+            });
+
             return response()->json([
                 'message' => 'Employee profile created successfully',
                 'data' => $staff->load(['user', 'documents']),
@@ -158,8 +165,16 @@ class EmployeeController extends Controller
         $staff = Staff::with('user')->findOrFail($id);
         $validated = $this->validatePayload($request, $staff);
         $panNumber = $validated['pan_number'] ?? $validated['pan_card'] ?? null;
+        $before = [
+            'user' => $staff->user?->only(['first_name', 'last_name', 'email', 'phone', 'role']),
+            'staff' => $staff->only([
+                'employee_id', 'joining_date', 'employee_type', 'designation', 'department',
+                'qualification', 'salary', 'date_of_birth', 'gender', 'address',
+                'emergency_contact', 'aadhar_number', 'pan_number', 'status', 'resignation_date',
+            ]),
+        ];
 
-        return DB::transaction(function () use ($request, $staff, $validated, $panNumber) {
+        return DB::transaction(function () use ($request, $staff, $validated, $panNumber, $before) {
             $userPayload = [];
             foreach (['first_name', 'last_name', 'phone', 'role'] as $field) {
                 if (array_key_exists($field, $validated)) {
@@ -205,6 +220,14 @@ class EmployeeController extends Controller
             }
 
             $this->storeDocuments($request, $staff);
+            $changes = $this->employeeNotificationChanges($before, $staff->fresh(['user']), $request);
+
+            DB::afterCommit(function () use ($staff, $changes) {
+                app(EventNotificationService::class)->notifyEmployeeProfileUpdated(
+                    $staff->fresh(['user']),
+                    $changes
+                );
+            });
 
             return response()->json([
                 'message' => 'Employee profile updated successfully',
@@ -644,5 +667,67 @@ class EmployeeController extends Controller
                 'uploaded_by' => $request->user()?->id,
             ]);
         }
+    }
+
+    private function employeeNotificationChanges(array $before, Staff $staff, Request $request): array
+    {
+        $labels = [
+            'first_name' => 'First name',
+            'last_name' => 'Last name',
+            'email' => 'Email',
+            'phone' => 'Phone',
+            'role' => 'Role',
+            'employee_id' => 'Employee ID',
+            'joining_date' => 'Joining date',
+            'employee_type' => 'Employee type',
+            'designation' => 'Designation',
+            'department' => 'Department',
+            'qualification' => 'Qualification',
+            'salary' => 'Salary',
+            'date_of_birth' => 'Date of birth',
+            'gender' => 'Gender',
+            'address' => 'Address',
+            'emergency_contact' => 'Emergency contact',
+            'aadhar_number' => 'Aadhaar number',
+            'pan_number' => 'PAN number',
+            'status' => 'Status',
+            'resignation_date' => 'Resignation date',
+        ];
+
+        $current = array_merge(
+            $staff->user?->only(['first_name', 'last_name', 'email', 'phone', 'role']) ?? [],
+            $staff->only(array_keys(array_diff_key($labels, array_flip(['first_name', 'last_name', 'email', 'phone', 'role']))))
+        );
+        $original = array_merge($before['user'] ?? [], $before['staff'] ?? []);
+
+        $changes = [];
+        foreach ($labels as $field => $label) {
+            $oldValue = $this->normalizeNotificationValue($original[$field] ?? null);
+            $newValue = $this->normalizeNotificationValue($current[$field] ?? null);
+            if ($oldValue !== $newValue) {
+                $changes[] = sprintf('%s: %s -> %s', $label, $oldValue, $newValue);
+            }
+        }
+
+        if ($request->hasFile('image')) {
+            $changes[] = 'Profile image updated.';
+        }
+
+        if (!empty($request->file('documents', []))) {
+            $changes[] = 'Supporting documents uploaded.';
+        }
+
+        return $changes;
+    }
+
+    private function normalizeNotificationValue(mixed $value): string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('d M Y');
+        }
+
+        $normalized = trim((string) $value);
+
+        return $normalized === '' ? '-' : $normalized;
     }
 }

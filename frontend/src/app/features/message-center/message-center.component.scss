@@ -1,0 +1,241 @@
+.message-center-page {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.message-center-page__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.message-center-page__header h2 {
+  margin: 0 0 0.35rem;
+}
+
+.message-center-page__header p,
+.hint {
+  margin: 0;
+  color: #64748b;
+}
+
+.message-center-page__summary {
+  min-width: 120px;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+  text-align: center;
+}
+
+.message-center-page__summary strong,
+.message-center-page__summary span {
+  display: block;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 1.25rem;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.delivery-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.delivery-alert {
+  display: grid;
+  gap: 0.3rem;
+  padding: 1rem 1.1rem;
+  border-radius: 16px;
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.delivery-alert--critical {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.delivery-alert--warning {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.delivery-stats__card {
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.delivery-stats__card strong,
+.delivery-stats__card span {
+  display: block;
+}
+
+.message-center-page__grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.message-form,
+.recipient-filters {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.birthday-form {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.birthday-form__full {
+  grid-column: 1 / -1;
+}
+
+label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+input,
+select,
+button,
+textarea {
+  min-height: 42px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  padding: 0.65rem 0.8rem;
+  font: inherit;
+}
+
+textarea {
+  min-height: 180px;
+  resize: vertical;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.checkbox input {
+  min-height: auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+}
+
+.channel-group {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.label-inline {
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.channel-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+}
+
+.channel-option--disabled {
+  opacity: 0.55;
+}
+
+.primary {
+  background: #0f766e;
+  color: #fff;
+  border-color: #0f766e;
+}
+
+.error {
+  color: #b91c1c;
+}
+
+.success {
+  color: #047857;
+}
+
+.recipient-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin: 0.25rem 0 0.75rem;
+  color: #475569;
+}
+
+.recipient-table {
+  display: grid;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.recipient-table__row {
+  display: grid;
+  grid-template-columns: 70px 1.2fr 1fr 120px 120px 1.4fr;
+  gap: 0.75rem;
+  padding: 0.8rem 1rem;
+  border-top: 1px solid #e2e8f0;
+  align-items: center;
+}
+
+.recipient-table__row--head {
+  background: #f8fafc;
+  font-weight: 700;
+  color: #334155;
+  border-top: none;
+}
+
+.birthday-box__header h3 {
+  margin: 0 0 0.35rem;
+}
+
+.birthday-box__header p {
+  margin: 0 0 1rem;
+  color: #64748b;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (max-width: 720px) {
+  .message-center-page__header,
+  .recipient-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .delivery-stats,
+  .message-center-page__grid,
+  .recipient-table__row {
+    grid-template-columns: 1fr;
+  }
+}

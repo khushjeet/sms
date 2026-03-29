@@ -10,7 +10,7 @@ export class ResultPublishingService {
   private readonly api = inject(ApiClient);
 
   listPublished(params?: { exam_session_id?: number; class_id?: number; search?: string; per_page?: number; page?: number }) {
-    return this.api.get<PaginatedResponse<PublishedResultRow>>('results/published', params);
+    return this.api.get<PaginatedResponse<PublishedResultRow> & { hidden_result_notice?: string | null }>('results/published', params);
   }
 
   listSessions(params?: { class_id?: number; academic_year_id?: number; status?: string; per_page?: number }) {

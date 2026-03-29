@@ -2,15 +2,21 @@ import { DecimalPipe, NgFor, NgIf } from '@angular/common';
 import { Component, ElementRef, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { forkJoin } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import { AuthService } from '../../core/services/auth.service';
+import { ClassesService } from '../../core/services/classes.service';
+import { EmployeesService } from '../../core/services/employees.service';
+import { ExpensesService } from '../../core/services/expenses.service';
 import { SelfAttendanceService } from '../../core/services/self-attendance.service';
+import { EmailSystemStatus, SchoolDetailsService } from '../../core/services/school-details.service';
+import { NotificationsService } from '../../core/services/notifications.service';
+import { StudentsService } from '../../core/services/students.service';
 import { StudentDashboardService } from '../../core/services/student-dashboard.service';
+import { StudentThemeService } from '../../core/services/student-theme.service';
 import { StudentDashboardResponse, StudentDashboardYearOption } from '../../models/student-dashboard';
-import {
-  DashboardNotificationItem,
-  SelfAttendanceStatusResponse
-} from '../../models/self-attendance';
+import { AppNotification } from '../../models/notification';
+import { SelfAttendanceStatusResponse } from '../../models/self-attendance';
 
 @Component({
   selector: 'app-dashboard',
@@ -22,7 +28,14 @@ import {
 export class DashboardComponent {
   private readonly auth = inject(AuthService);
   private readonly studentDashboardService = inject(StudentDashboardService);
+  private readonly studentThemeService = inject(StudentThemeService);
   private readonly selfAttendanceService = inject(SelfAttendanceService);
+  private readonly studentsService = inject(StudentsService);
+  private readonly employeesService = inject(EmployeesService);
+  private readonly classesService = inject(ClassesService);
+  private readonly expensesService = inject(ExpensesService);
+  private readonly schoolDetailsService = inject(SchoolDetailsService);
+  private readonly notificationsService = inject(NotificationsService);
   private readonly fb = inject(FormBuilder);
   private mediaStream: MediaStream | null = null;
   private capturedBlob: Blob | null = null;
@@ -30,13 +43,20 @@ export class DashboardComponent {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly data = signal<StudentDashboardResponse | null>(null);
-  readonly notifications = signal<DashboardNotificationItem[]>([]);
+  readonly notifications = signal<AppNotification[]>([]);
   readonly selfAttendance = signal<SelfAttendanceStatusResponse | null>(null);
   readonly cameraError = signal<string | null>(null);
   readonly cameraReady = signal(false);
   readonly capturePreview = signal<string | null>(null);
   readonly actionBusy = signal(false);
   readonly viewerImage = signal<string | null>(null);
+  readonly overviewStats = signal({
+    students: 0,
+    employees: 0,
+    classes: 0,
+    expenses: 0,
+  });
+  readonly emailHealth = signal<EmailSystemStatus | null>(null);
 
   readonly filters = this.fb.nonNullable.group({
     academic_year_id: [''],
@@ -44,8 +64,150 @@ export class DashboardComponent {
   });
 
   readonly isStudent = computed(() => this.auth.user()?.role === 'student');
+  readonly role = computed(() => this.auth.user()?.role ?? '');
   readonly widgetMap = computed(() => this.data()?.widgets ?? {});
   readonly yearOptions = computed<StudentDashboardYearOption[]>(() => this.data()?.academic_year_options ?? []);
+  readonly schoolStageLabel = computed(() => {
+    const totalStudents = this.overviewStats().students;
+    if (totalStudents >= 1500) {
+      return 'Enterprise-ready for large campuses';
+    }
+    if (totalStudents >= 500) {
+      return 'Ready for growing multi-section schools';
+    }
+    if (totalStudents > 0) {
+      return 'Ready for day-to-day school operations';
+    }
+
+    return 'Ready to onboard your next academic year';
+  });
+  readonly emailHealthAlert = computed(() => {
+    const health = this.emailHealth();
+    return health && health.status !== 'healthy' ? health : null;
+  });
+  readonly overviewHighlights = computed(() => {
+    const stats = this.overviewStats();
+
+    return [
+      {
+        label: 'Student Records',
+        value: stats.students,
+        tone: 'blue',
+        caption: 'Admissions, profiles, history, and portal access'
+      },
+      {
+        label: 'Team Strength',
+        value: stats.employees,
+        tone: 'amber',
+        caption: 'Employees, teachers, HR operations, and payroll'
+      },
+      {
+        label: 'Academic Structure',
+        value: stats.classes,
+        tone: 'green',
+        caption: 'Classes, sections, timetable, and subject planning'
+      },
+      {
+        label: 'Expense Entries',
+        value: stats.expenses,
+        tone: 'slate',
+        caption: 'Controlled spending, receipts, and audits'
+      },
+    ];
+  });
+  readonly spotlightCards = computed(() => {
+    const stats = this.overviewStats();
+    const notificationCount = this.notifications().length;
+    const selfAttendance = this.selfAttendance();
+
+    return [
+      {
+        title: 'Admissions + Academic Journey',
+        value: `${stats.students} students`,
+        description: 'Create records, manage enrollments, and show year-wise academic history in one flow.',
+        route: '/students',
+        cta: 'Open Students'
+      },
+      {
+        title: 'Parent Trust + Student Portal',
+        value: `${notificationCount} live notices`,
+        description: 'Demo fee, result, admit card, timetable, and attendance from the student side.',
+        route: '/dashboard',
+        cta: 'Show Portal'
+      },
+      {
+        title: 'Operational Discipline',
+        value: selfAttendance?.session?.review_status ? selfAttendance.session.review_status : 'Live',
+        description: 'Attendance lock, selfie proof, payroll finalization, and auditable workflows.',
+        route: '/hr-payroll',
+        cta: 'Open HR Payroll'
+      }
+    ];
+  });
+  readonly quickActions = computed(() => {
+    const role = this.role();
+
+    if (role === 'teacher') {
+      return [
+        { label: 'Mark Attendance', route: '/teacher/mark-attendance', caption: 'Take attendance quickly' },
+        { label: 'Assign Marks', route: '/teacher/assign-marks', caption: 'Enter subject-wise marks' },
+        { label: 'My Timetable', route: '/teacher/timetable', caption: 'Show weekly teaching plan' },
+        { label: 'Published Results', route: '/teacher/published-results', caption: 'Download result papers' },
+      ];
+    }
+
+    if (role === 'accountant') {
+      return [
+        { label: 'Collect Fee', route: '/finance', caption: 'Assignments, receipts, and ledgers' },
+        { label: 'Expenses', route: '/expenses', caption: 'Track and verify spending' },
+        { label: 'HR Payroll', route: '/hr-payroll', caption: 'Generate and finalize payroll' },
+        { label: 'Receipts & Audit', route: '/admin/audit-downloads', caption: 'Show download and checksum trail' },
+      ];
+    }
+
+    return [
+      { label: 'New Admission', route: '/students/new', caption: 'Create a fresh student profile' },
+      { label: 'Collect Fee', route: '/finance', caption: 'Show receipts, dues, and ledger controls' },
+      { label: 'Publish Result', route: '/admin/published-results', caption: 'Reveal result publishing workflow' },
+      { label: 'Admit Cards', route: '/admin/admit-cards', caption: 'Generate and print exam cards' },
+      { label: 'Send Message', route: '/admin/send-message', caption: 'Parents, students, and scheduled mailers' },
+      { label: 'Generate Payroll', route: '/hr-payroll', caption: 'Attendance-backed salary snapshot demo' },
+    ];
+  });
+  readonly demoMoments = computed(() => {
+    const attendance = this.selfAttendance();
+    const hasCameraFlow = !!attendance?.can_mark || !!attendance?.session;
+
+    return [
+      {
+        title: 'Single student, complete digital journey',
+        detail: 'Admission to result to fee to timetable, all visible from one profile.'
+      },
+      {
+        title: 'Parent confidence',
+        detail: 'Receipts, portal visibility, printable artifacts, and audit-friendly records.'
+      },
+      {
+        title: 'Principal control',
+        detail: hasCameraFlow
+          ? 'Live attendance and approval workflow ready to demonstrate.'
+          : 'Admin oversight across academics, finance, and HR from one place.'
+      }
+    ];
+  });
+  readonly studentQuickInsight = computed(() => {
+    const vm = this.data();
+    if (!vm) {
+      return [];
+    }
+
+    return [
+      { label: 'Attendance', value: `${vm.quick_stats.attendance_percent.toFixed(2)}%`, caption: 'Current month performance' },
+      { label: 'Pending Fee', value: vm.quick_stats.pending_fee.toFixed(2), caption: 'Live fee position' },
+      { label: 'Upcoming Exam', value: vm.quick_stats.upcoming_exam || 'N/A', caption: 'Academic readiness' },
+      { label: 'Assignments Due', value: String(vm.quick_stats.assignments_due), caption: 'Action items this week' },
+    ];
+  });
 
   @ViewChild('cameraVideo') cameraVideo?: ElementRef<HTMLVideoElement>;
   @ViewChild('cameraCanvas') cameraCanvas?: ElementRef<HTMLCanvasElement>;
@@ -56,6 +218,7 @@ export class DashboardComponent {
       return;
     }
 
+    this.loadOverviewStats();
     this.loadNotifications();
     this.loadSelfAttendanceStatus();
   }
@@ -78,10 +241,41 @@ export class DashboardComponent {
     return !!widget?.enabled;
   }
 
+  toggleStudentTheme() {
+    this.studentThemeService.toggleTheme();
+  }
+
+  isStudentDarkMode(): boolean {
+    return this.studentThemeService.isDark();
+  }
+
   loadNotifications() {
-    this.selfAttendanceService.notifications().subscribe({
-      next: (response) => this.notifications.set(response.items ?? []),
+    this.notificationsService.fetchRecent(6).subscribe({
+      next: (response) => this.notifications.set(response.data ?? this.notificationsService.recentItems()),
       error: (err) => this.error.set(err?.error?.message || 'Unable to load notifications.')
+    });
+  }
+
+  loadOverviewStats() {
+    forkJoin({
+      students: this.studentsService.list({ per_page: 1 }),
+      employees: this.employeesService.list({ per_page: 1 }),
+      classes: this.classesService.list({ per_page: 1 }),
+      expenses: this.expensesService.list({ per_page: 1 }),
+      emailHealth: this.schoolDetailsService.getEmailHealth(),
+    }).subscribe({
+      next: ({ students, employees, classes, expenses, emailHealth }) => {
+        this.overviewStats.set({
+          students: students.total ?? 0,
+          employees: employees.total ?? 0,
+          classes: classes.total ?? 0,
+          expenses: expenses.data?.total ?? 0,
+        });
+        this.emailHealth.set(emailHealth);
+      },
+      error: (err) => {
+        this.error.set(err?.error?.message || 'Unable to load dashboard overview.');
+      }
     });
   }
 
@@ -214,6 +408,20 @@ export class DashboardComponent {
 
   closeViewer() {
     this.viewerImage.set(null);
+  }
+
+  attendanceProgressWidth(): number {
+    const percent = this.data()?.attendance_overview?.monthly_percentage ?? this.data()?.quick_stats.attendance_percent ?? 0;
+    return Math.min(100, Math.max(0, percent));
+  }
+
+  feeProgressWidth(): number {
+    const fee = this.data()?.fee_summary;
+    if (!fee || fee.total_fee <= 0) {
+      return 0;
+    }
+
+    return Math.min(100, Math.max(0, (fee.paid_amount / fee.total_fee) * 100));
   }
 
   private async resolveLocation(): Promise<{ latitude: number; longitude: number; accuracy: number } | null> {

@@ -1,14 +1,34 @@
-<section class="student-section">
-  <header>
-    <h2>{{ title() }}</h2>
-    <p class="muted">Live data from student dashboard API</p>
+<section class="student-section" [class.student-section--dark]="isDarkMode()" [class.student-section--light]="!isDarkMode()">
+  <header class="section-hero">
+    <div class="section-hero__top">
+      <div class="section-hero__copy">
+        <p class="section-hero__eyebrow">Student Portal</p>
+        <h2>{{ title() }}</h2>
+        <p class="muted">{{ subtitle() }}</p>
+        <div class="section-hero__accent">
+          <span>{{ sectionAccent() }}</span>
+          <span *ngIf="vm() as data">{{ data.profile_summary.class || '-' }} / {{ data.profile_summary.section || '-' }}</span>
+          <span *ngIf="vm() as data">{{ data.profile_summary.academic_year || '-' }}</span>
+        </div>
+      </div>
+    </div>
+    <div class="hero-metrics" *ngIf="heroMetrics().length">
+      <div class="hero-metric" *ngFor="let item of heroMetrics()">
+        <span>{{ item.label }}</span>
+        <strong>{{ item.value }}</strong>
+      </div>
+    </div>
   </header>
 
   <p class="error" *ngIf="error()">{{ error() }}</p>
-  <p class="muted" *ngIf="loading()">Loading...</p>
+  <div class="state-card" *ngIf="loading()">
+    <p class="muted">Loading your latest section data...</p>
+  </div>
 
-  <ng-container *ngIf="vm() as data">
-    <p class="muted" *ngIf="!hasPermission()">This section is not enabled for your account.</p>
+  <ng-container *ngIf="vm() as data; else admitOnlyView">
+    <div class="state-card" *ngIf="!hasPermission()">
+      <p class="muted">This section is not enabled for your account.</p>
+    </div>
 
     <div class="panel admit-card-panel" *ngIf="section() === 'admit-card' && hasPermission()">
       <div class="admit-header">
@@ -22,8 +42,8 @@
       </div>
       <p *ngIf="admitLoading()" class="muted">Loading admit status...</p>
       <div class="meta-grid">
-        <div><span>Exam</span>{{ admitExamName() }}</div>
-        <div><span>Published</span>{{ admitPublishedAt() }}</div>
+        <div class="metric-card"><span>Exam</span><strong>{{ admitExamName() }}</strong></div>
+        <div class="metric-card"><span>Published</span><strong>{{ admitPublishedAt() }}</strong></div>
       </div>
       <div class="notice" [class.notice--warn]="isAdmitHidden()">
         <span>Message</span>
@@ -35,48 +55,142 @@
     </div>
 
     <div class="panel" *ngIf="section() === 'fee' && hasPermission()">
-      <p><span>Total Fee:</span> {{ data.fee_summary.total_fee | number : '1.0-2' }}</p>
-      <p><span>Paid:</span> {{ data.fee_summary.paid_amount | number : '1.0-2' }}</p>
-      <p><span>Pending:</span> {{ data.fee_summary.pending_amount | number : '1.0-2' }}</p>
-      <p><span>Last Payment:</span> {{ data.fee_summary.last_payment_date || '-' }}</p>
+      <div class="panel__head">
+        <div>
+          <h3>Fee Summary</h3>
+          <p class="muted">Your current collection and pending balance overview.</p>
+        </div>
+      </div>
+      <div class="summary-grid">
+        <article class="summary-card">
+          <span>Total Fee</span>
+          <strong>{{ data.fee_summary.total_fee | number : '1.0-2' }}</strong>
+        </article>
+        <article class="summary-card">
+          <span>Paid</span>
+          <strong>{{ data.fee_summary.paid_amount | number : '1.0-2' }}</strong>
+        </article>
+        <article class="summary-card summary-card--alert">
+          <span>Pending</span>
+          <strong>{{ data.fee_summary.pending_amount | number : '1.0-2' }}</strong>
+        </article>
+      </div>
+      <div class="info-grid">
+        <div class="info-item">
+          <span>Last Payment Date</span>
+          <strong>{{ data.fee_summary.last_payment_date || '-' }}</strong>
+        </div>
+        <div class="info-item">
+          <span>Last Receipt</span>
+          <strong>{{ data.fee_summary.last_receipt_number || '-' }}</strong>
+        </div>
+      </div>
+      <a
+        *ngIf="data.fee_summary.receipt_download_available && data.fee_summary.receipt_download_url"
+        class="action-link"
+        [href]="data.fee_summary.receipt_download_url"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Open latest receipt
+      </a>
     </div>
 
     <div class="panel" *ngIf="section() === 'result' && hasPermission()">
-      <p *ngIf="data.result_section.state !== 'available'">{{ data.result_section.message }}</p>
+      <div class="panel__head">
+        <div>
+          <h3>Result Summary</h3>
+          <p class="muted">Your most recent published examination result.</p>
+        </div>
+        <button
+          *ngIf="canDownloadResult()"
+          type="button"
+          class="action-btn action-btn--inline"
+          (click)="downloadResultPaper()"
+          [disabled]="resultActionLoading()"
+        >
+          {{ resultActionLoading() ? 'Preparing PDF...' : 'Download Result PDF' }}
+        </button>
+      </div>
+      <div class="state-card" *ngIf="data.result_section.state !== 'available'">
+        <p class="muted">{{ data.result_section.message }}</p>
+      </div>
       <ng-container *ngIf="data.result_section.state === 'available' && data.result_section.latest_result as result">
-        <p><span>Exam:</span> {{ result.exam_name || '-' }}</p>
-        <p><span>Grade:</span> {{ result.grade || '-' }}</p>
-        <p><span>Percentage:</span> {{ result.percentage | number : '1.0-2' }}</p>
-        <p><span>Published:</span> {{ result.published_at || '-' }}</p>
+        <div class="summary-grid">
+          <article class="summary-card">
+            <span>Exam</span>
+            <strong>{{ result.exam_name || '-' }}</strong>
+          </article>
+          <article class="summary-card">
+            <span>Grade</span>
+            <strong>{{ result.grade || '-' }}</strong>
+          </article>
+          <article class="summary-card">
+            <span>Percentage</span>
+            <strong>{{ result.percentage | number : '1.0-2' }}</strong>
+          </article>
+        </div>
+        <div class="info-grid">
+          <div class="info-item">
+            <span>Published At</span>
+            <strong>{{ result.published_at || '-' }}</strong>
+          </div>
+        </div>
       </ng-container>
     </div>
 
     <div class="panel table-wrap" *ngIf="section() === 'timetable' && hasPermission()">
-      <p class="muted" *ngIf="data.timetable.items.length === 0">No timetable data available.</p>
-      <table *ngIf="data.timetable.items.length > 0">
+      <div class="panel__head">
+        <div>
+          <h3>Class Timetable</h3>
+          <p class="muted">Your timetable is arranged day-wise and period-wise for easier reading.</p>
+        </div>
+        <button type="button" class="action-btn action-btn--inline" (click)="downloadTimetable()" [disabled]="timetableActionLoading() || data.timetable.items.length === 0">
+          {{ timetableActionLoading() ? 'Preparing PDF...' : 'Download PDF' }}
+        </button>
+      </div>
+      <div class="empty-state" *ngIf="data.timetable.items.length === 0">
+        <p class="muted">No timetable data available.</p>
+      </div>
+      <table class="timetable-matrix" *ngIf="data.timetable.items.length > 0">
         <thead>
           <tr>
-            <th>Day</th>
-            <th>Period</th>
-            <th>Time</th>
-            <th>Subject</th>
-            <th>Teacher</th>
+            <th>Period / Time</th>
+            <th *ngFor="let day of data.timetable.days">{{ day.label }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let row of data.timetable.items">
-            <td>{{ row.day }}</td>
-            <td>{{ row.period }}</td>
-            <td>{{ row.time }}</td>
-            <td>{{ row.subject }}</td>
-            <td>{{ row.teacher }}</td>
+          <tr *ngFor="let row of timetableMatrix()">
+            <td class="slot-cell">
+              <strong>{{ row.slot.name }}</strong>
+              <span>{{ row.slot.time_range }}</span>
+              <small *ngIf="row.slot.is_break">Break</small>
+            </td>
+            <td *ngFor="let entry of row.days" class="timetable-cell">
+              <ng-container *ngIf="entry.cell as cell; else emptyCell">
+                <strong>{{ cell.subject }}</strong>
+                <span>{{ cell.teacher }}</span>
+                <small *ngIf="cell.room_number">Room: {{ cell.room_number }}</small>
+              </ng-container>
+              <ng-template #emptyCell>
+                <span class="muted">-</span>
+              </ng-template>
+            </td>
           </tr>
         </tbody>
       </table>
     </div>
 
     <div class="panel table-wrap" *ngIf="section() === 'academic-history' && hasPermission()">
-      <p class="muted" *ngIf="data.academic_history.items.length === 0">No academic history found.</p>
+      <div class="panel__head">
+        <div>
+          <h3>Academic History</h3>
+          <p class="muted">A year-wise record of your academic enrollment journey.</p>
+        </div>
+      </div>
+      <div class="empty-state" *ngIf="data.academic_history.items.length === 0">
+        <p class="muted">No academic history found.</p>
+      </div>
       <table *ngIf="data.academic_history.items.length > 0">
         <thead>
           <tr>
@@ -100,7 +214,15 @@
     </div>
 
     <div class="panel table-wrap" *ngIf="section() === 'attendance-history' && hasPermission()">
-      <p class="muted" *ngIf="data.attendance_history.items.length === 0">No attendance history found.</p>
+      <div class="panel__head">
+        <div>
+          <h3>Attendance History</h3>
+          <p class="muted">Month-wise breakdown of your class and section attendance.</p>
+        </div>
+      </div>
+      <div class="empty-state" *ngIf="data.attendance_history.items.length === 0">
+        <p class="muted">No attendance history found.</p>
+      </div>
       <table *ngIf="data.attendance_history.items.length > 0">
         <thead>
           <tr>
@@ -123,6 +245,42 @@
           </tr>
         </tbody>
       </table>
+      <div class="info-grid" *ngIf="data.attendance_history.items.length > 0">
+        <div class="info-item">
+          <span>Average Percentage</span>
+          <strong>{{ attendanceHistoryAverage() }}</strong>
+        </div>
+        <div class="info-item">
+          <span>Latest Month</span>
+          <strong>{{ data.attendance_history.items[0].month }}</strong>
+        </div>
+      </div>
     </div>
   </ng-container>
+
+  <ng-template #admitOnlyView>
+    <div class="panel admit-card-panel" *ngIf="hasAdmitData()">
+      <div class="admit-header">
+        <div>
+          <h3>Admit Card</h3>
+          <p class="muted">Your latest admit card status</p>
+        </div>
+        <span class="status-pill" [class.status-pill--blocked]="isAdmitHidden()">
+          {{ admitStatusLabel() }}
+        </span>
+      </div>
+      <p *ngIf="admitLoading()" class="muted">Loading admit status...</p>
+      <div class="meta-grid">
+        <div class="metric-card"><span>Exam</span><strong>{{ admitExamName() }}</strong></div>
+        <div class="metric-card"><span>Published</span><strong>{{ admitPublishedAt() }}</strong></div>
+      </div>
+      <div class="notice" [class.notice--warn]="isAdmitHidden()">
+        <span>Message</span>
+        <strong>{{ admitMessage() }}</strong>
+      </div>
+      <button type="button" class="action-btn" (click)="printAdmitCard()" [disabled]="!canDownloadAdmit() || admitActionLoading()">
+        {{ admitActionLoading() ? 'Loading...' : 'Download / Print Admit' }}
+      </button>
+    </div>
+  </ng-template>
 </section>

@@ -66,16 +66,23 @@
         <span class="finance__student-pin-label">Admission No.</span>
         <strong>{{ student.admission_number }}</strong>
       </div>
-      <div class="finance__student-pin-item">
+      <div class="finance__student-pin-item" *ngIf="selectedEnrollment() as enrollment">
+        <span class="finance__student-pin-label">Enrollment ID</span>
+        <strong>{{ enrollment.id }}</strong>
+      </div>
+      <div class="finance__student-pin-item" *ngIf="!selectedEnrollment()">
         <span class="finance__student-pin-label">Enrollment ID</span>
         <strong>{{ student.currentEnrollment?.id || 'N/A' }}</strong>
       </div>
-      <div class="finance__student-pin-item">
+      <div class="finance__student-pin-item" *ngIf="selectedEnrollment() as enrollment">
         <span class="finance__student-pin-label">Class / Section</span>
         <strong>
-          {{ student.currentEnrollment?.section?.class?.name || '-' }}
-          {{ student.currentEnrollment?.section?.name || '' }}
+          {{ enrollment.class_name || '-' }}{{ enrollment.section ? ' / ' + enrollment.section : '' }}
         </strong>
+      </div>
+      <div class="finance__student-pin-item" *ngIf="!selectedEnrollment()">
+        <span class="finance__student-pin-label">Class / Section</span>
+        <strong>{{ student.currentEnrollment?.section?.class?.name || '-' }} {{ student.currentEnrollment?.section?.name || '' }}</strong>
       </div>
       <div class="finance__student-pin-item">
         <span class="finance__student-pin-label">Status</span>
@@ -425,9 +432,13 @@
   <section *ngIf="activeTab() === 'payments'" class="finance__stack">
     <article class="panel">
       <h3>Record Payment (Enrollment Based)</h3>
+      <div class="finance__linked-context" *ngIf="selectedEnrollment() as enrollment">
+        <span>Linked enrollment: <strong>#{{ enrollment.id }}</strong></span>
+        <span>Class / Section: <strong>{{ enrollment.class_name || '-' }}{{ enrollment.section ? ' / ' + enrollment.section : '' }}</strong></span>
+      </div>
       <!-- Payment create START (ngSubmit: createPayment) -->
       <form [formGroup]="paymentForm" (ngSubmit)="createPayment()" class="form">
-        <input formControlName="enrollment_id" type="number" placeholder="Enrollment ID" />
+        <input formControlName="enrollment_id" type="number" placeholder="Enrollment ID (auto-filled when student is linked)" />
         <input formControlName="amount" type="number" placeholder="Amount" />
         <input formControlName="payment_date" type="date" />
         <select formControlName="payment_method">
@@ -448,9 +459,13 @@
 
     <article class="panel">
       <h3>Payment History</h3>
+      <div class="finance__linked-context" *ngIf="selectedEnrollment() as enrollment">
+        <span>Using linked enrollment: <strong>#{{ enrollment.id }}</strong></span>
+        <span>Class / Section: <strong>{{ enrollment.class_name || '-' }}{{ enrollment.section ? ' / ' + enrollment.section : '' }}</strong></span>
+      </div>
       <!-- Payments lookup START (click: loadPayments) -->
       <form [formGroup]="paymentLookupForm" class="form">
-        <input formControlName="enrollment_id" type="number" placeholder="Enrollment ID" />
+        <input formControlName="enrollment_id" type="number" placeholder="Enrollment ID (auto-filled when student is linked)" />
         <button type="button" (click)="loadPayments()">Load payments</button>
       </form>
       <!-- Payments lookup END -->
@@ -466,7 +481,7 @@
           Generate PDF ({{ selectedPaymentIds().length }})
         </button>
         <span class="badge" *ngIf="selectedPaymentIds().length">
-          Total: {{ selectedPaymentsTotal() }}
+          Total: {{ formatAmount(selectedPaymentsTotal()) }}
         </span>
       </div>
       <div class="panel__scroll panel__scroll--both">
@@ -498,9 +513,9 @@
             </span>
             <span>{{ payment.id }}</span>
             <span>{{ payment.receipt_number }}</span>
-            <span>{{ payment.payment_date }}</span>
-            <span>{{ payment.amount }}</span>
-            <span>{{ payment.payment_method }}</span>
+            <span>{{ formatPaymentDate(payment.payment_date) }}</span>
+            <span>{{ formatAmount(toNumber(payment.amount)) }}</span>
+            <span>{{ formatPaymentMethod(payment.payment_method) }}</span>
             <span>{{ payment.is_refunded ? 'Refunded' : 'OK' }}</span>
             <!-- Payment receipt download START (click: downloadPaymentReceipt) -->
             <button
@@ -627,11 +642,20 @@
             {{ year.name }}{{ year.is_current ? ' (Current)' : '' }}
           </option>
         </select>
+        <select formControlName="class_id">
+          <option value="">All classes</option>
+          <option *ngFor="let classItem of classes()" [value]="classItem.id">
+            {{ classItem.name }}
+          </option>
+        </select>
         <select formControlName="section_id">
           <option value="">All sections</option>
-          <option *ngFor="let section of sections()" [value]="section.id">{{ section.name }}</option>
+          <option *ngFor="let section of dueReportSections()" [value]="section.id">{{ section.name }}</option>
         </select>
+        <input formControlName="start_date" type="date" />
+        <input formControlName="end_date" type="date" />
         <button type="button" (click)="runDueReport()">Generate due report</button>
+        <button type="button" class="ghost" (click)="downloadDueReportCsv()">Download CSV</button>
       </form>
       <!-- Due report END -->
       <div class="panel__scroll panel__scroll--both panel__scroll--wide">
@@ -664,9 +688,26 @@
       <h3>Collection Report</h3>
       <!-- Collection report START (click: runCollectionReport) -->
       <form [formGroup]="collectionReportForm" class="form">
+        <select formControlName="academic_year_id">
+          <option value="">All academic years</option>
+          <option *ngFor="let year of academicYearOptions()" [value]="year.id">
+            {{ year.name }}{{ year.is_current ? ' (Current)' : '' }}
+          </option>
+        </select>
+        <select formControlName="class_id">
+          <option value="">All classes</option>
+          <option *ngFor="let classItem of classes()" [value]="classItem.id">
+            {{ classItem.name }}
+          </option>
+        </select>
+        <select formControlName="section_id">
+          <option value="">All sections</option>
+          <option *ngFor="let section of collectionReportSections()" [value]="section.id">{{ section.name }}</option>
+        </select>
         <input formControlName="start_date" type="date" />
         <input formControlName="end_date" type="date" />
         <button type="button" (click)="runCollectionReport()">Generate collection report</button>
+        <button type="button" class="ghost" (click)="downloadCollectionReportCsv()">Download CSV</button>
       </form>
       <!-- Collection report END -->
       <div class="finance__kpis" *ngIf="collectionSummary() as summary">
@@ -683,6 +724,7 @@
         <div class="table table--collection">
           <div class="table__row table__head">
             <span>ID</span>
+            <span>Enrollment</span>
             <span>Receipt</span>
             <span>Date</span>
             <span>Amount</span>
@@ -691,6 +733,7 @@
           </div>
           <div class="table__row" *ngFor="let payment of collectionPayments()">
             <span>{{ payment.id }}</span>
+            <span>{{ payment.enrollment_id }}</span>
             <span>{{ payment.receipt_number }}</span>
             <span>{{ payment.payment_date }}</span>
             <span>{{ payment.amount }}</span>
@@ -711,7 +754,20 @@
             {{ year.name }}{{ year.is_current ? ' (Current)' : '' }}
           </option>
         </select>
+        <select formControlName="class_id">
+          <option value="">All classes</option>
+          <option *ngFor="let classItem of classes()" [value]="classItem.id">
+            {{ classItem.name }}
+          </option>
+        </select>
+        <select formControlName="section_id">
+          <option value="">All sections</option>
+          <option *ngFor="let section of routeWiseSections()" [value]="section.id">{{ section.name }}</option>
+        </select>
+        <input formControlName="start_date" type="date" />
+        <input formControlName="end_date" type="date" />
         <button type="button" (click)="runRouteWiseReport()">Generate route-wise report</button>
+        <button type="button" class="ghost" (click)="downloadRouteWiseReportCsv()">Download CSV</button>
       </form>
       <!-- Route-wise report END -->
       <p class="table__empty" *ngIf="reportsLoading()">Generating report...</p>
@@ -720,6 +776,7 @@
           <div class="table__row table__head">
             <span>Route</span>
             <span>Number</span>
+            <span>Enrollment IDs</span>
             <span>Students</span>
             <span>Fee / Student</span>
             <span>Total Amount</span>
@@ -728,6 +785,7 @@
           <div class="table__row" *ngFor="let row of routeWiseRows()">
             <span class="table__wrap">{{ row.route_name || 'N/A' }}</span>
             <span>{{ row.route_number || '-' }}</span>
+            <span class="table__wrap">{{ (row.enrollment_ids || []).join(', ') || '-' }}</span>
             <span>{{ row.student_count }}</span>
             <span>{{ row.fee_amount }}</span>
             <span>{{ row.total_amount }}</span>

@@ -4,7 +4,7 @@ import { NgIf, NgFor } from '@angular/common';
 import { StudentsService } from '../../core/services/students.service';
 import { Student, StudentFinancialSummary } from '../../models/student';
 import { environment } from '../../../environments/environment';
-import { downloadStudentPdfFile, SchoolPrintDetails } from './student-pdf-template';
+import { resolveStudentAvatarCandidates } from './student-avatar.util';
 
 @Component({
   selector: 'app-student-detail',
@@ -17,17 +17,7 @@ export class StudentDetailComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly studentsService = inject(StudentsService);
-  private readonly printDateFormatter = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' });
   private readonly uiDateFormatter = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' });
-  private readonly apiOrigin = new URL(environment.apiBaseUrl).origin;
-  private readonly schoolDetails: SchoolPrintDetails = {
-    name: 'INDIAN PUBLIC SCHOOL',
-    address: 'Naugawa Chowk, Yogapatti - 845452',
-    phone: '9771782335, 9931482335',
-    email: 'info@ipsyogapatti.com',
-    website: 'https://ipsyogapatti.com',
-    logoUrl: `http://127.0.0.1:8000/storage/assets/ips.png`
-  };
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
@@ -41,6 +31,9 @@ export class StudentDetailComponent {
   readonly showConfirmPassword = signal(false);
   readonly updatingPassword = signal(false);
   readonly passwordMessage = signal<string | null>(null);
+  readonly avatarAttemptIndex = signal(0);
+  readonly avatarObjectUrl = signal<string | null>(null);
+  private readonly apiOrigin = environment.apiBaseUrl.replace(/\/api\/v\d+\/?$/, '');
 
   ngOnInit() {
     const id = Number(this.route.snapshot.paramMap.get('id'));
@@ -53,6 +46,8 @@ export class StudentDetailComponent {
     this.studentsService.getById(id).subscribe({
       next: (student) => {
         this.student.set(student);
+        this.avatarAttemptIndex.set(0);
+        this.loadAvatar(student.id);
         this.loading.set(false);
       },
       error: () => {
@@ -137,27 +132,17 @@ export class StudentDetailComponent {
 
   downloadStudentPdf() {
     const student = this.student();
-    if (!student) {
+    if (!student || this.downloadingPdf()) {
       return;
     }
 
     this.error.set(null);
     this.downloadingPdf.set(true);
 
-    this.studentsService.getById(student.id).subscribe({
-      next: async (fullStudent) => {
-        try {
-          await downloadStudentPdfFile({
-            student: fullStudent,
-            school: this.schoolDetails,
-            generatedOn: this.printDateFormatter.format(new Date()),
-            avatarUrl: this.avatarUrl(fullStudent)
-          });
-        } catch {
-          this.error.set('Unable to render student image in PDF.');
-        } finally {
-          this.downloadingPdf.set(false);
-        }
+    this.studentsService.downloadPdf(student.id).subscribe({
+      next: (blob) => {
+        this.saveBlob(blob, `student-${(student.admission_number || student.id).toString().replace(/\s+/g, '-')}.pdf`);
+        this.downloadingPdf.set(false);
       },
       error: (err) => {
         this.downloadingPdf.set(false);
@@ -167,14 +152,76 @@ export class StudentDetailComponent {
   }
 
   avatarUrl(student: Student): string | null {
-    const avatar = student.avatar_url || student.profile?.avatar_url || student.user?.avatar;
-    if (!avatar) {
+    const objectUrl = this.avatarObjectUrl();
+    if (objectUrl) {
+      return objectUrl;
+    }
+
+    const candidates = this.avatarCandidates(student);
+    return candidates[this.avatarAttemptIndex()] ?? null;
+  }
+
+  onAvatarError(student: Student): void {
+    const nextIndex = this.avatarAttemptIndex() + 1;
+    if (nextIndex >= this.avatarCandidates(student).length) {
+      this.avatarAttemptIndex.set(nextIndex);
+      return;
+    }
+
+    this.avatarAttemptIndex.set(nextIndex);
+  }
+
+  fileUrl(path?: string | null): string | null {
+    if (!path) {
       return null;
     }
-    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
-      return avatar;
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
     }
-    return `${this.apiOrigin}/storage/${avatar.replace(/^\/+/, '')}`;
+    const normalized = path.replace(/^public\//, '').replace(/^\/+/, '');
+    return `${this.apiOrigin}/storage/${normalized}`;
+  }
+
+  private avatarCandidates(student: Student): string[] {
+    return resolveStudentAvatarCandidates(student, environment.apiBaseUrl);
+  }
+
+  private loadAvatar(studentId: number): void {
+    this.revokeAvatarObjectUrl();
+
+    this.studentsService.avatar(studentId).subscribe({
+      next: (blob) => {
+        if (!blob.type.toLowerCase().startsWith('image/')) {
+          return;
+        }
+
+        this.avatarObjectUrl.set(URL.createObjectURL(blob));
+      },
+      error: () => {
+        this.avatarObjectUrl.set(null);
+      }
+    });
+  }
+
+  private revokeAvatarObjectUrl(): void {
+    const currentUrl = this.avatarObjectUrl();
+    if (currentUrl) {
+      URL.revokeObjectURL(currentUrl);
+      this.avatarObjectUrl.set(null);
+    }
+  }
+
+  ngOnDestroy() {
+    this.revokeAvatarObjectUrl();
+  }
+
+  private saveBlob(blob: Blob, filename: string): void {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   formatHistoryDate(value?: string | null): string {

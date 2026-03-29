@@ -8,6 +8,7 @@ use App\Models\AcademicYearExamConfig;
 use App\Models\ClassModel;
 use App\Models\Section;
 use App\Models\Subject;
+use App\Services\Email\EventNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -185,7 +186,7 @@ class SubjectController extends Controller
         $validated = $request->validate([
             'class_id' => 'required|integer|exists:classes,id',
             'academic_year_id' => 'required|integer|exists:academic_years,id',
-            'academic_year_exam_config_id' => 'required|integer|exists:academic_year_exam_configs,id',
+            'academic_year_exam_config_id' => 'nullable|integer|exists:academic_year_exam_configs,id',
             'max_marks' => 'required|integer|min:1|max:1000',
             'pass_marks' => 'required|integer|min:0|max:1000|lte:max_marks',
             'is_mandatory' => 'sometimes|boolean',
@@ -193,8 +194,13 @@ class SubjectController extends Controller
 
         $class = ClassModel::findOrFail((int) $validated['class_id']);
         $academicYear = AcademicYear::findOrFail((int) $validated['academic_year_id']);
-        $examConfig = AcademicYearExamConfig::query()->findOrFail((int) $validated['academic_year_exam_config_id']);
-        if ((int) $examConfig->academic_year_id !== (int) $academicYear->id) {
+        $examConfigId = isset($validated['academic_year_exam_config_id'])
+            ? (int) $validated['academic_year_exam_config_id']
+            : null;
+        $examConfig = $examConfigId !== null
+            ? AcademicYearExamConfig::query()->findOrFail($examConfigId)
+            : null;
+        if ($examConfig && (int) $examConfig->academic_year_id !== (int) $academicYear->id) {
             return response()->json([
                 'message' => 'Selected exam configuration does not belong to selected academic year.',
             ], 422);
@@ -202,13 +208,13 @@ class SubjectController extends Controller
 
         $now = now();
 
-        DB::transaction(function () use ($subject, $validated, $now) {
+        DB::transaction(function () use ($subject, $validated, $now, $examConfigId) {
             DB::table('class_subjects')->upsert(
                 [[
                     'class_id' => (int) $validated['class_id'],
                     'subject_id' => $subject->id,
                     'academic_year_id' => (int) $validated['academic_year_id'],
-                    'academic_year_exam_config_id' => (int) $validated['academic_year_exam_config_id'],
+                    'academic_year_exam_config_id' => $examConfigId,
                     'max_marks' => (int) $validated['max_marks'],
                     'pass_marks' => (int) $validated['pass_marks'],
                     'is_mandatory' => (bool) ($validated['is_mandatory'] ?? true),
@@ -228,8 +234,8 @@ class SubjectController extends Controller
                 'class_name' => $class->name,
                 'academic_year_id' => $academicYear->id,
                 'academic_year_name' => $academicYear->name,
-                'academic_year_exam_config_id' => (int) $examConfig->id,
-                'academic_year_exam_config_name' => $examConfig->name,
+                'academic_year_exam_config_id' => $examConfig?->id,
+                'academic_year_exam_config_name' => $examConfig?->name,
                 'max_marks' => (int) $validated['max_marks'],
                 'pass_marks' => (int) $validated['pass_marks'],
                 'is_mandatory' => (bool) ($validated['is_mandatory'] ?? true),
@@ -282,14 +288,15 @@ class SubjectController extends Controller
 
         $query = DB::table('teacher_subject_assignments as tsa')
             ->join('users as u', 'u.id', '=', 'tsa.teacher_id')
-            ->join('sections as s', 's.id', '=', 'tsa.section_id')
-            ->join('classes as c', 'c.id', '=', 's.class_id')
+            ->leftJoin('sections as s', 's.id', '=', 'tsa.section_id')
+            ->join('classes as c', 'c.id', '=', 'tsa.class_id')
             ->join('academic_years as ay', 'ay.id', '=', 'tsa.academic_year_id')
             ->leftJoin('academic_year_exam_configs as aec', 'aec.id', '=', 'tsa.academic_year_exam_config_id')
             ->where('tsa.subject_id', $id)
             ->select(
                 'tsa.id',
                 'tsa.subject_id',
+                'tsa.class_id',
                 'tsa.teacher_id',
                 'tsa.section_id',
                 'tsa.academic_year_id',
@@ -321,8 +328,9 @@ class SubjectController extends Controller
             return [
                 'id' => (int) $row->id,
                 'subject_id' => (int) $row->subject_id,
+                'class_id' => (int) $row->class_id,
                 'teacher_id' => (int) $row->teacher_id,
-                'section_id' => (int) $row->section_id,
+                'section_id' => $row->section_id !== null ? (int) $row->section_id : null,
                 'academic_year_id' => (int) $row->academic_year_id,
                 'academic_year_exam_config_id' => $row->academic_year_exam_config_id !== null ? (int) $row->academic_year_exam_config_id : null,
                 'teacher_name' => trim(($row->first_name ?? '') . ' ' . ($row->last_name ?? '')),
@@ -352,15 +360,23 @@ class SubjectController extends Controller
                     $query->whereIn('role', ['teacher', 'staff']);
                 }),
             ],
-            'section_id' => 'required|integer|exists:sections,id',
+            'class_id' => 'required|integer|exists:classes,id',
+            'section_id' => 'nullable|integer|exists:sections,id',
             'academic_year_id' => 'required|integer|exists:academic_years,id',
             'academic_year_exam_config_id' => 'required|integer|exists:academic_year_exam_configs,id',
         ]);
 
-        $section = Section::query()->findOrFail((int) $validated['section_id']);
-        if ((int) $section->academic_year_id !== (int) $validated['academic_year_id']) {
+        $section = !empty($validated['section_id'])
+            ? Section::query()->findOrFail((int) $validated['section_id'])
+            : null;
+        if ($section && (int) $section->academic_year_id !== (int) $validated['academic_year_id']) {
             return response()->json([
                 'message' => 'Selected section does not belong to selected academic year.',
+            ], 422);
+        }
+        if ($section && (int) $section->class_id !== (int) $validated['class_id']) {
+            return response()->json([
+                'message' => 'Selected section does not belong to selected class.',
             ], 422);
         }
         $examConfig = AcademicYearExamConfig::query()->findOrFail((int) $validated['academic_year_exam_config_id']);
@@ -371,7 +387,7 @@ class SubjectController extends Controller
         }
 
         $classSubjectMapping = DB::table('class_subjects')
-            ->where('class_id', (int) $section->class_id)
+            ->where('class_id', (int) $validated['class_id'])
             ->where('subject_id', $id)
             ->where('academic_year_id', (int) $validated['academic_year_id'])
             ->first();
@@ -393,7 +409,8 @@ class SubjectController extends Controller
         $rows = collect($validated['teacher_ids'])
             ->map(fn ($teacherId) => [
                 'teacher_id' => (int) $teacherId,
-                'section_id' => (int) $validated['section_id'],
+                'class_id' => (int) $validated['class_id'],
+                'section_id' => !empty($validated['section_id']) ? (int) $validated['section_id'] : null,
                 'subject_id' => $id,
                 'academic_year_id' => (int) $validated['academic_year_id'],
                 'academic_year_exam_config_id' => (int) $validated['academic_year_exam_config_id'],
@@ -403,10 +420,29 @@ class SubjectController extends Controller
             ->values()
             ->all();
 
-        DB::table('teacher_subject_assignments')->upsert(
-            $rows,
-            ['teacher_id', 'section_id', 'subject_id', 'academic_year_id'],
-            ['academic_year_exam_config_id', 'updated_at']
+        foreach ($rows as $row) {
+            DB::table('teacher_subject_assignments')->updateOrInsert(
+                [
+                    'teacher_id' => $row['teacher_id'],
+                    'class_id' => $row['class_id'],
+                    'section_id' => $row['section_id'],
+                    'subject_id' => $row['subject_id'],
+                    'academic_year_id' => $row['academic_year_id'],
+                ],
+                [
+                    'academic_year_exam_config_id' => $row['academic_year_exam_config_id'],
+                    'updated_at' => $row['updated_at'],
+                    'created_at' => $row['created_at'],
+                ]
+            );
+        }
+
+        app(EventNotificationService::class)->notifyTeacherSubjectAssigned(
+            Subject::query()->findOrFail($id),
+            array_map('intval', $validated['teacher_ids']),
+            (int) $validated['class_id'],
+            !empty($validated['section_id']) ? (int) $validated['section_id'] : null,
+            (int) $validated['academic_year_id']
         );
 
         return response()->json([
@@ -414,7 +450,8 @@ class SubjectController extends Controller
             'data' => [
                 'subject_id' => $id,
                 'teacher_ids' => array_map('intval', $validated['teacher_ids']),
-                'section_id' => (int) $validated['section_id'],
+                'class_id' => (int) $validated['class_id'],
+                'section_id' => !empty($validated['section_id']) ? (int) $validated['section_id'] : null,
                 'academic_year_id' => (int) $validated['academic_year_id'],
                 'academic_year_exam_config_id' => (int) $validated['academic_year_exam_config_id'],
             ],

@@ -22,6 +22,7 @@ export class EmployeesService {
     status?: string;
     employee_type?: string;
     role?: string;
+    designation?: string;
     search?: string;
     per_page?: number;
     page?: number;

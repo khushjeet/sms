@@ -7,6 +7,7 @@ use App\Models\Enrollment;
 use App\Models\Section;
 use App\Models\AcademicYear;
 use App\Models\FeeAssignment;
+use App\Services\Email\EventNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -171,6 +172,11 @@ class EnrollmentController extends Controller
 
             DB::commit();
 
+            app(EventNotificationService::class)->notifyEnrollmentEvent(
+                $enrollment->fresh(['student.user', 'student.profile', 'student.parents.user', 'academicYear', 'classModel', 'section.class']),
+                'Enrollment created successfully.'
+            );
+
             return response()->json([
                 'message' => 'Enrollment created successfully',
                 'data' => $enrollment->load(['student.user', 'academicYear', 'classModel', 'section.class', 'feeAssignment'])
@@ -265,6 +271,11 @@ class EnrollmentController extends Controller
         }
 
         $enrollment->update($validated);
+
+        app(EventNotificationService::class)->notifyEnrollmentEvent(
+            $enrollment->fresh(['student.user', 'student.profile', 'student.parents.user', 'academicYear', 'classModel', 'section.class']),
+            'Enrollment updated successfully.'
+        );
 
         return response()->json([
             'message' => 'Enrollment updated successfully',
@@ -394,6 +405,11 @@ class EnrollmentController extends Controller
             }
 
             DB::commit();
+
+            app(EventNotificationService::class)->notifyEnrollmentEvent(
+                $newEnrollment->fresh(['student.user', 'student.profile', 'student.parents.user', 'academicYear', 'classModel', 'section.class']),
+                'Student promoted successfully.'
+            );
 
             return response()->json([
                 'message' => 'Student promoted successfully',
@@ -532,6 +548,11 @@ class EnrollmentController extends Controller
 
             DB::commit();
 
+            app(EventNotificationService::class)->notifyEnrollmentEvent(
+                $newEnrollment->fresh(['student.user', 'student.profile', 'student.parents.user', 'academicYear', 'classModel', 'section.class']),
+                'Student repeat enrollment created successfully.'
+            );
+
             return response()->json([
                 'message' => 'Student marked as repeated successfully',
                 'data' => $newEnrollment->load([
@@ -630,6 +651,11 @@ class EnrollmentController extends Controller
             ]);
 
             DB::commit();
+
+            app(EventNotificationService::class)->notifyEnrollmentEvent(
+                $enrollment->fresh(['student.user', 'student.profile', 'student.parents.user', 'academicYear', 'classModel', 'section.class']),
+                'Student transferred successfully.'
+            );
 
             return response()->json([
                 'message' => 'Student transferred successfully',

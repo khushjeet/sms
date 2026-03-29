@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -44,5 +45,17 @@ class StaffAttendanceRecord extends Model
     public function approvedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function setAttendanceDateAttribute($value): void
+    {
+        if ($value instanceof CarbonInterface) {
+            $this->attributes['attendance_date'] = $value->toDateString();
+            return;
+        }
+
+        $this->attributes['attendance_date'] = $value !== null
+            ? (string) \Illuminate\Support\Carbon::parse((string) $value)->toDateString()
+            : null;
     }
 }

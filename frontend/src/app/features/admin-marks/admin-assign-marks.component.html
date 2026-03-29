@@ -13,39 +13,50 @@
       <option *ngFor="let item of classes()" [value]="item.id">{{ item.name }}</option>
     </select>
 
-    <select [ngModel]="sectionId()" (ngModelChange)="onSectionChange($event)">
-      <option value="">Select section</option>
-      <option *ngFor="let item of sections()" [value]="item.id">{{ item.name }}</option>
+    <select [ngModel]="academicYearId()" (ngModelChange)="onAcademicYearChange($event)" [disabled]="!classId()">
+      <option value="">{{ classId() ? 'Select academic year' : 'Select class first' }}</option>
+      <option *ngFor="let item of academicYears()" [value]="item.id">{{ item.name }}</option>
     </select>
 
-    <select [ngModel]="subjectId()" (ngModelChange)="subjectId.set($event)">
-      <option value="">Select subject</option>
-      <option *ngFor="let item of filteredSubjects()" [value]="item.id">
+    <select *ngIf="showSectionSelect()" [ngModel]="sectionId()" (ngModelChange)="onSectionChange($event)">
+      <option value="">All sections</option>
+      <option *ngFor="let item of availableSections()" [value]="item.id">{{ item.name }}</option>
+    </select>
+
+    <select [ngModel]="subjectId()" (ngModelChange)="onSubjectChange($event)" [disabled]="!canPickSubject()">
+      <option value="">{{ canPickSubject() ? 'Select subject' : 'Select class first' }}</option>
+      <option *ngFor="let item of availableSubjects()" [value]="item.id">
         {{ item.name }} ({{ item.subject_code || item.code }})
       </option>
     </select>
 
     <input
-      [ngModel]="subjectCode()"
-      (ngModelChange)="subjectCode.set($event)"
-      placeholder="Subject code (optional)"
-      maxlength="100"
+      type="date"
+      [ngModel]="markedOn()"
+      (ngModelChange)="onDateChange($event)"
+      [disabled]="!canPickDate()"
+      [attr.min]="academicYear()?.start_date || null"
+      [attr.max]="academicYear()?.end_date || null"
     />
-    <input type="date" [ngModel]="markedOn()" (ngModelChange)="markedOn.set($event)" />
-    <select [ngModel]="examConfigurationId()" (ngModelChange)="examConfigurationId.set($event)">
-      <option value="">Select configured exam</option>
+
+    <select
+      [ngModel]="examConfigurationId()"
+      (ngModelChange)="onExamConfigurationChange($event)"
+      [disabled]="!canPickExamConfiguration()"
+    >
+      <option value="">{{ canPickExamConfiguration() ? 'Select configured exam' : 'Select subject first' }}</option>
       <option *ngFor="let exam of examConfigurations()" [value]="exam.id">
         {{ exam.sequence }}. {{ exam.name }}
       </option>
     </select>
 
-    <button type="button" (click)="loadSheet()" [disabled]="loading()">
+    <button type="button" (click)="loadSheet()" [disabled]="loading() || loadingFilters() || !canLoadSheet()">
       {{ loading() ? 'Loading...' : 'Load' }}
     </button>
-    <button type="button" class="btn-save" (click)="saveCompiled()" [disabled]="saving() || loading() || isFinalized()">
+    <button type="button" class="btn-save" (click)="saveCompiled()" [disabled]="saving() || loading() || loadingFilters() || isFinalized() || rows().length === 0">
       {{ saving() ? 'Saving...' : 'Save Compiled' }}
     </button>
-    <button type="button" class="btn-finalize" (click)="finalize()" [disabled]="finalizing() || loading() || isFinalized()">
+    <button type="button" class="btn-finalize" (click)="finalize()" [disabled]="finalizing() || loading() || loadingFilters() || isFinalized() || rows().length === 0">
       {{ finalizing() ? 'Finalizing...' : (isFinalized() ? 'Finalized' : 'Finalize') }}
     </button>
     <button
@@ -68,6 +79,15 @@
     </button>
   </div>
 
+  <p class="scope" *ngIf="academicYear() as year">
+    Academic Year <strong>{{ year.name }}</strong> |
+    Valid Date <strong>{{ year.start_date }}</strong> to <strong>{{ year.end_date }}</strong>
+  </p>
+
+  <p class="scope" *ngIf="showAllSectionsHint()">
+    Section is not selected, so students from all sections in this class/academic year will be shown.
+  </p>
+
   <p class="scope" *ngIf="scope() as current">
     <strong>{{ current.subject_name }}</strong> ({{ current.subject_code }}) |
     Class <strong>{{ current.class_name }}</strong> |
@@ -75,17 +95,26 @@
     Year <strong>{{ current.academic_year_name }}</strong>
   </p>
 
+  <p class="scope" *ngIf="targetEnrollmentIds().length > 0">
+    Showing only selected students: {{ targetEnrollmentIds().join(', ') }}
+  </p>
+
+  <div class="setup-messages" *ngIf="!loadingFilters() && setupMessages().length > 0">
+    <p *ngFor="let item of setupMessages()">{{ item }}</p>
+  </div>
+
   <div class="table" *ngIf="rows().length > 0">
-    <div class="table__row table__row--head" [style.gridTemplateColumns]="'90px 1.4fr ' + 'repeat(' + teachers().length + ', 140px) 120px 120px 1.2fr'">
+    <div class="table__row table__row--head" [style.gridTemplateColumns]="'90px 1.4fr ' + 'repeat(' + teachers().length + ', 140px) 120px 120px 120px 1.2fr'">
       <span>Roll #</span>
       <span>Student</span>
       <span *ngFor="let teacher of teachers()">{{ teacher.name }}</span>
       <span>Final Marks</span>
       <span>Final Max</span>
+      <span>Absent (A)</span>
       <span>Remarks</span>
     </div>
 
-    <div class="table__row" *ngFor="let row of rows()" [style.gridTemplateColumns]="'90px 1.4fr ' + 'repeat(' + teachers().length + ', 140px) 120px 120px 1.2fr'">
+    <div class="table__row" *ngFor="let row of rows()" [style.gridTemplateColumns]="'90px 1.4fr ' + 'repeat(' + teachers().length + ', 140px) 120px 120px 120px 1.2fr'">
       <span>{{ row.roll_number || '-' }}</span>
       <span>{{ row.student_name || '-' }}</span>
 
@@ -97,7 +126,7 @@
         <input
           type="number"
           min="0"
-          [disabled]="isFinalized()"
+          [disabled]="isFinalized() || !!row.compiled_is_absent"
           [ngModel]="row.compiled_marks_obtained"
           (ngModelChange)="onCompiledMarksChange(row, $event)"
         />
@@ -112,6 +141,17 @@
         />
       </span>
       <span>
+        <label class="absent-toggle">
+          <input
+            type="checkbox"
+            [disabled]="isFinalized()"
+            [ngModel]="!!row.compiled_is_absent"
+            (ngModelChange)="onCompiledAbsentChange(row, !!$event)"
+          />
+          <span>A</span>
+        </label>
+      </span>
+      <span>
         <input
           [disabled]="isFinalized()"
           [ngModel]="row.compiled_remarks"
@@ -122,5 +162,7 @@
     </div>
   </div>
 
-  <p *ngIf="!loading() && rows().length === 0">No rows found for selected filters.</p>
+  <p *ngIf="!loading() && !loadingFilters() && rows().length === 0 && canLoadSheet()">
+    {{ emptyStateMessage() || 'No rows found for selected filters.' }}
+  </p>
 </div>

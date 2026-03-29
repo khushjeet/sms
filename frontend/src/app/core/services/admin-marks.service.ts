@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { ApiClient } from './api-client.service';
-import { AdminMarksSheetResponse } from '../../models/admin-marks';
+import { AdminMarksFiltersResponse, AdminMarksSheetResponse } from '../../models/admin-marks';
 
 @Injectable({
   providedIn: 'root'
@@ -8,12 +8,18 @@ import { AdminMarksSheetResponse } from '../../models/admin-marks';
 export class AdminMarksService {
   private readonly api = inject(ApiClient);
 
-  sheet(params: { section_id: number; subject_id?: number; subject_code?: string; marked_on?: string; exam_configuration_id: number }) {
+  filters(params: { class_id: number; academic_year_id: number; section_id?: number }) {
+    return this.api.get<AdminMarksFiltersResponse>('admin-marks/filters', params);
+  }
+
+  sheet(params: { class_id?: number; academic_year_id?: number; section_id?: number; subject_id?: number; subject_code?: string; marked_on?: string; exam_configuration_id: number }) {
     return this.api.get<AdminMarksSheetResponse>('admin-marks/sheet', params);
   }
 
   compile(payload: {
-    section_id: number;
+    class_id?: number;
+    academic_year_id?: number;
+    section_id?: number;
     subject_id?: number;
     subject_code?: string;
     marked_on: string;
@@ -24,7 +30,9 @@ export class AdminMarksService {
   }
 
   finalize(payload: {
-    section_id: number;
+    class_id?: number;
+    academic_year_id?: number;
+    section_id?: number;
     subject_id?: number;
     subject_code?: string;
     marked_on: string;

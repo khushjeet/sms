@@ -4,7 +4,7 @@ import { environment } from '../../../environments/environment';
 
 export interface SchoolPrintDetails {
   name: string;
-  address: string;  
+  address: string;
   phone: string;
   email: string;
   website: string;
@@ -15,7 +15,11 @@ interface BuildStudentPrintHtmlParams {
   student: Student;
   school: SchoolPrintDetails;
   generatedOn: string;
-  avatarUrl?: string | null;
+  avatar?: string | null;
+  avatarBlob?: Blob | null;
+  avatarDataUrl?: string | null;
+  logoBlob?: Blob | null;
+  logoDataUrl?: string | null;
 }
 
 interface StudentPdfData {
@@ -39,12 +43,21 @@ interface StudentPdfData {
 }
 
 export async function downloadStudentPdfFile(params: BuildStudentPrintHtmlParams): Promise<void> {
-  const { student, school, generatedOn, avatarUrl } = params;
+  const { student, school, generatedOn, avatar, avatarBlob, avatarDataUrl, logoBlob, logoDataUrl } = params;
   const data = extractPdfData(student);
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
-  const [avatarDataUrl, logoDataUrl] = await Promise.all([
-    toDataUrl(avatarUrl, student.id),
-    toDataUrl(school.logoUrl ?? null)
+  const [resolvedAvatarSource, resolvedLogoSource] = await Promise.all([
+    resolvePdfImageSource({
+      blob: avatarBlob,
+      dataUrl: avatarDataUrl,
+      url: avatar,
+      studentId: student.id
+    }),
+    resolvePdfImageSource({
+      blob: logoBlob,
+      dataUrl: logoDataUrl,
+      url: school.logoUrl ?? null
+    })
   ]);
 
   const pageWidth = 595.28;
@@ -66,16 +79,16 @@ export async function downloadStudentPdfFile(params: BuildStudentPrintHtmlParams
   doc.setDrawColor(198, 198, 198);
   doc.rect(bodyX, cardY + 18, 86, 96);
   doc.rect(cardX + cardW - 104, cardY + 18, 86, 96);
-  if (avatarDataUrl) {
-    doc.addImage(avatarDataUrl, detectImageFormat(avatarDataUrl), bodyX + 2, cardY + 20, 82, 92);
+  if (resolvedAvatarSource) {
+    await drawPdfImage(doc, resolvedAvatarSource, bodyX + 2, cardY + 20, 82, 92);
   } else {
     doc.setTextColor(148, 163, 184);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     doc.text('No Photo', bodyX + 43, cardY + 70, { align: 'center' });
   }
-  if (logoDataUrl) {
-    doc.addImage(logoDataUrl, detectImageFormat(logoDataUrl), cardX + cardW - 102, cardY + 20, 82, 92);
+  if (resolvedLogoSource) {
+    await drawPdfImage(doc, resolvedLogoSource, cardX + cardW - 102, cardY + 20, 82, 92);
   }
 
   doc.setTextColor(20, 61, 68);
@@ -87,7 +100,7 @@ export async function downloadStudentPdfFile(params: BuildStudentPrintHtmlParams
   doc.setTextColor(25, 25, 25);
   doc.setFontSize(11);
   doc.text(school.address, cardX + cardW / 2, cardY + 100, { align: 'center' });
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('helvetica', 'bold');
   doc.text(`Mob. ${school.phone} | ${school.website}`, cardX + cardW / 2, cardY + 116, { align: 'center' });
 
   doc.setDrawColor(44, 44, 44);
@@ -95,7 +108,7 @@ export async function downloadStudentPdfFile(params: BuildStudentPrintHtmlParams
   doc.line(bodyX, cardY + 128, cardX + cardW - 18, cardY + 128);
 
   doc.setTextColor(20, 61, 68);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
   drawNameBlock(doc, data.studentName.toUpperCase(), bodyX + 6, cardY + 148, sectionRightX - bodyX - 18);
 
@@ -105,7 +118,7 @@ export async function downloadStudentPdfFile(params: BuildStudentPrintHtmlParams
   doc.text('DOB', sectionRightX, cardY + 156);
   doc.text('Gender', sectionRightX + 126, cardY + 156);
   doc.text('Blood Group', sectionRightX + 252, cardY + 156);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(10.5);
   doc.text(formatDate(student.date_of_birth), sectionRightX, cardY + 174);
   doc.text(student.gender || '-', sectionRightX + 126, cardY + 174);
@@ -120,13 +133,13 @@ export async function downloadStudentPdfFile(params: BuildStudentPrintHtmlParams
   doc.text('Admission #:', bodyX + 6, cardY + 228);
   doc.text('Class:', bodyX + 6, cardY + 258);
   doc.text('Roll No:', bodyX + 6, cardY + 286);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('helvetica', 'bold');
   doc.text(student.admission_number || '-', bodyX + 6, cardY + 246);
   doc.text(data.className, bodyX + 48, cardY + 258);
   doc.text(data.rollNumber, bodyX + 48, cardY + 286);
 
   doc.setTextColor(20, 61, 68);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(17);
   doc.text('Parent / Guardian', sectionRightX, cardY + 220);
 
@@ -137,7 +150,7 @@ export async function downloadStudentPdfFile(params: BuildStudentPrintHtmlParams
   doc.text('Mother', sectionRightX + 126, cardY + 248);
   doc.text('Father Occupation', sectionRightX + 252, cardY + 248);
 
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   drawWrapped(doc, data.fatherName, sectionRightX, cardY + 266, 116);
   drawWrapped(doc, data.fatherPhone, sectionRightX, cardY + 284, 116, [100, 116, 139]);
@@ -151,14 +164,14 @@ export async function downloadStudentPdfFile(params: BuildStudentPrintHtmlParams
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(35, 35, 35);
   doc.text('Mother Occupation', sectionRightX + 252, cardY + 304);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('helvetica', 'bold');
   drawWrapped(doc, data.motherOccupation, sectionRightX + 252, cardY + 320, 104);
 
   doc.setDrawColor(176, 176, 176);
   doc.line(sectionRightX, cardY + 372, cardX + cardW - 28, cardY + 372);
 
   doc.setTextColor(20, 61, 68);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(17);
   doc.text('Address', sectionRightX, cardY + 396);
   doc.setTextColor(35, 35, 35);
@@ -166,7 +179,7 @@ export async function downloadStudentPdfFile(params: BuildStudentPrintHtmlParams
   doc.setFontSize(10.5);
   doc.text('Permanent', sectionRightX, cardY + 420);
   doc.text('Current', sectionRightX + 190, cardY + 420);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   drawWrapped(doc, data.permanentAddress, sectionRightX, cardY + 438, 176);
   drawWrapped(doc, data.currentAddress, sectionRightX + 190, cardY + 438, 166);
@@ -201,7 +214,7 @@ export async function downloadStudentPdfFile(params: BuildStudentPrintHtmlParams
 }
 
 export function buildStudentPrintHtml(params: BuildStudentPrintHtmlParams): string {
-  const { student, school, generatedOn, avatarUrl } = params;
+  const { student, school, generatedOn, avatar } = params;
   const data = extractPdfData(student);
   const {
     studentName,
@@ -417,7 +430,7 @@ export function buildStudentPrintHtml(params: BuildStudentPrintHtmlParams): stri
     <div class="sheet">
       <div class="school-header">
         <div class="photo">
-          ${avatarUrl ? `<img src="${escapeHtml(avatarUrl)}" alt="Student photo" />` : '<span class="empty">No Photo</span>'}
+          ${avatar ? `<img src="${escapeHtml(avatar)}" alt="Student photo" />` : '<span class="empty">No Photo</span>'}
         </div>
         <div class="school-center">
           <h1 class="school-name">${escapeHtml(school.name)}</h1>
@@ -456,7 +469,6 @@ export function buildStudentPrintHtml(params: BuildStudentPrintHtmlParams): stri
         <div class="mini-info">
           <p><strong>Admission #:</strong><br />${escapeHtml(student.admission_number || '-')}</p>
           <p><strong>Class:</strong> ${escapeHtml(className)}</p>
-          <p><strong>Roll No:</strong> ${escapeHtml(String(rollNumber))}</p>
         </div>
         <div>
           <h2 class="section-title">Parent / Guardian</h2>
@@ -575,6 +587,7 @@ function drawWrapped(
   color: [number, number, number] = [35, 35, 35]
 ): void {
   doc.setTextColor(color[0], color[1], color[2]);
+  doc.setFont('helvetica', 'bold');
   const lines = doc.splitTextToSize(text || '-', width) as string[];
   doc.text(lines.slice(0, 3), x, y);
 }
@@ -587,7 +600,7 @@ async function toDataUrl(url: string | null | undefined, studentId?: number): Pr
     return url;
   }
 
-  const candidates = buildAvatarCandidates(url, studentId);
+  const candidates = buildImageCandidates(url, studentId);
   const authHeaders = getAuthHeaders();
   const apiBase = environment.apiBaseUrl.replace(/\/$/, '');
   const apiPath = extractPath(environment.apiBaseUrl);
@@ -604,21 +617,17 @@ async function toDataUrl(url: string | null | undefined, studentId?: number): Pr
       }
 
       const contentType = (response.headers.get('content-type') || '').toLowerCase();
-      if (contentType && !contentType.startsWith('image/')) {
+      if (contentType && !isSupportedImageMimeType(contentType) && contentType !== 'application/octet-stream') {
         continue;
       }
 
       const blob = await response.blob();
-      if (blob.type && !blob.type.toLowerCase().startsWith('image/')) {
+      const blobType = blob.type.toLowerCase();
+      if (blobType && !isSupportedImageMimeType(blobType) && blobType !== 'application/octet-stream') {
         continue;
       }
 
-      const dataUrl = await new Promise<string | null>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string) || null);
-        reader.onerror = () => resolve(null);
-        reader.readAsDataURL(blob);
-      });
+      const dataUrl = await blobToDataUrl(blob);
       if (dataUrl) {
         return dataUrl;
       }
@@ -629,23 +638,41 @@ async function toDataUrl(url: string | null | undefined, studentId?: number): Pr
   return null;
 }
 
-function buildAvatarCandidates(url: string, studentId?: number): string[] {
+function buildImageCandidates(url: string, studentId?: number): string[] {
   const values = new Set<string>();
   const apiBase = environment.apiBaseUrl.replace(/\/$/, '');
   const apiOrigin = new URL(environment.apiBaseUrl).origin;
   const apiPath = extractPath(environment.apiBaseUrl);
+  const normalized = url.trim();
 
-  const proxiedInput = toProxiedPath(url, apiOrigin);
+  const proxiedInput = toProxiedPath(normalized, apiOrigin);
   if (proxiedInput) {
     values.add(proxiedInput);
   }
-  values.add(url);
+  values.add(normalized);
 
-  if (url.includes('/public/storage/')) {
-    values.add(url.replace('/public/storage/', '/storage/'));
+  if (normalized.startsWith('/')) {
+    values.add(`${apiOrigin}${normalized}`);
+  } else if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+    values.add(`${apiOrigin}/${normalized.replace(/^\/+/, '')}`);
   }
-  if (url.includes('/storage/')) {
-    values.add(url.replace('/storage/', '/public/storage/'));
+
+  if (normalized.includes('/public/storage/')) {
+    values.add(normalized.replace('/public/storage/', '/storage/'));
+  }
+  if (normalized.includes('/storage/')) {
+    values.add(normalized.replace('/storage/', '/public/storage/'));
+  }
+
+  const relativePath = normalized.replace(/^\/+/, '');
+  if (relativePath.startsWith('public/storage/')) {
+    const storagePath = relativePath.replace(/^public\/storage\//, '');
+    values.add(`${apiOrigin}/public/storage/${storagePath}`);
+    values.add(`${apiOrigin}/storage/${storagePath}`);
+  } else if (relativePath.startsWith('storage/')) {
+    const storagePath = relativePath.replace(/^storage\//, '');
+    values.add(`${apiOrigin}/storage/${storagePath}`);
+    values.add(`${apiOrigin}/public/storage/${storagePath}`);
   }
 
   if (studentId) {
@@ -682,6 +709,167 @@ function extractPath(url: string): string {
   }
 }
 
+export async function blobToDataUrl(blob: Blob | null | undefined): Promise<string | null> {
+  if (!blob) {
+    return null;
+  }
+
+  const blobType = blob.type.toLowerCase();
+  if (blobType && !isSupportedImageMimeType(blobType) && blobType !== 'application/octet-stream') {
+    return null;
+  }
+
+  const dataUrl = await new Promise<string | null>((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string) || null);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blob);
+  });
+
+  if (!dataUrl) {
+    return null;
+  }
+
+  const normalizedDataUrl = await normalizeImageDataUrl(dataUrl, blob);
+  return ensurePdfCompatibleImageDataUrl(normalizedDataUrl);
+}
+
+async function normalizeImageDataUrl(dataUrl: string, blob: Blob): Promise<string> {
+  if (!dataUrl.startsWith('data:application/octet-stream')) {
+    return dataUrl;
+  }
+
+  const inferredMime = await inferImageMimeType(blob);
+  if (!inferredMime) {
+    return dataUrl;
+  }
+
+  return dataUrl.replace('data:application/octet-stream', `data:${inferredMime}`);
+}
+
+async function ensurePdfCompatibleImageDataUrl(dataUrl: string): Promise<string> {
+  if (dataUrl.startsWith('data:image/png') || dataUrl.startsWith('data:image/jpeg')) {
+    return dataUrl;
+  }
+
+  try {
+    return await rasterizeImageDataUrl(dataUrl, 'image/png');
+  } catch {
+    return dataUrl;
+  }
+}
+
+function rasterizeImageDataUrl(dataUrl: string, targetMimeType: 'image/png' | 'image/jpeg'): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth || image.width || 1;
+        canvas.height = image.naturalHeight || image.height || 1;
+
+        const context = canvas.getContext('2d');
+        if (!context) {
+          reject(new Error('Canvas context unavailable'));
+          return;
+        }
+
+        if (targetMimeType === 'image/jpeg') {
+          context.fillStyle = '#ffffff';
+          context.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL(targetMimeType));
+      } catch (error) {
+        reject(error);
+      }
+    };
+    image.onerror = () => reject(new Error('Image load failed'));
+    image.src = dataUrl;
+  });
+}
+
+async function inferImageMimeType(blob: Blob): Promise<string | null> {
+  const bytes = new Uint8Array(await blob.slice(0, 16).arrayBuffer());
+
+  if (bytes.length >= 4 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    return 'image/png';
+  }
+
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'image/jpeg';
+  }
+
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return 'image/webp';
+  }
+
+  if (bytes.length >= 4 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) {
+    return 'image/gif';
+  }
+
+  return null;
+}
+
+function isSupportedImageMimeType(value: string): boolean {
+  return value.startsWith('image/');
+}
+
+async function resolvePdfImageSource(params: {
+  blob?: Blob | null;
+  dataUrl?: string | null;
+  url?: string | null;
+  studentId?: number;
+}): Promise<string | null> {
+  if (params.blob) {
+    const blobSource = await blobToDataUrl(params.blob);
+    if (blobSource) {
+      return blobSource;
+    }
+  }
+
+  if (params.dataUrl) {
+    return params.dataUrl;
+  }
+
+  if (!params.url) {
+    return null;
+  }
+
+  return toDataUrl(params.url, params.studentId);
+}
+
+async function drawPdfImage(
+  doc: jsPDF,
+  source: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): Promise<void> {
+  const normalizedSource = await normalizePdfImageSource(source);
+  doc.addImage(normalizedSource, detectImageFormat(normalizedSource), x, y, width, height);
+}
+
+async function normalizePdfImageSource(source: string): Promise<string> {
+  try {
+    return await rasterizeImageDataUrl(source, 'image/png');
+  } catch {
+    return source;
+  }
+}
+
 function getAuthHeaders(): Record<string, string> {
   try {
     const raw = localStorage.getItem('sms_auth_session');
@@ -698,19 +886,17 @@ function getAuthHeaders(): Record<string, string> {
   }
 }
 
-function detectImageFormat(dataUrl: string): 'PNG' | 'JPEG' | 'WEBP' {
+function detectImageFormat(dataUrl: string): 'PNG' | 'JPEG' {
   if (dataUrl.startsWith('data:image/png')) {
     return 'PNG';
   }
-  if (dataUrl.startsWith('data:image/webp')) {
-    return 'WEBP';
-  }
+
   return 'JPEG';
 }
 
 function drawNameBlock(doc: jsPDF, name: string, x: number, y: number, width: number): void {
   doc.setTextColor(20, 61, 68);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('helvetica', 'bold');
   const safeName = name || '-';
 
   let fontSize = 14;

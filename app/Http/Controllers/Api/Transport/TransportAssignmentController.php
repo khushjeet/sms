@@ -9,6 +9,7 @@ use App\Models\StudentTransportAssignment;
 use App\Models\TransportStop;
 use App\Models\TransportFeeCycle;
 use App\Services\Accounting\AccountingService;
+use App\Services\Email\EventNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -122,6 +123,14 @@ class TransportAssignmentController extends Controller
 
                         AuditLog::log('create', $cycle, null, $cycle->toArray(), 'Transport fee cycle auto-generated on assignment');
                         AuditLog::log('create', $ledger, null, $ledger->toArray(), 'Ledger debit (projection) created from auto-generated transport fee cycle');
+
+                        DB::afterCommit(function () use ($ledger) {
+                            app(EventNotificationService::class)->notifyStudentLedgerRecorded(
+                                $ledger->fresh(['enrollment.student.user', 'enrollment.student.profile', 'enrollment.student.parents.user', 'enrollment.section.class', 'enrollment.classModel', 'enrollment.academicYear']),
+                                'Transport charge added',
+                                'A transport charge has been added to the student account.'
+                            );
+                        });
                     }
                 }
             }
@@ -232,6 +241,14 @@ class TransportAssignmentController extends Controller
                     $chargedCount++;
                     AuditLog::log('create', $cycle, null, $cycle->toArray(), 'Transport fee cycle generated (bulk)');
                     AuditLog::log('create', $ledger, null, $ledger->toArray(), 'Ledger debit (projection) created from transport fee cycle (bulk)');
+
+                    DB::afterCommit(function () use ($ledger) {
+                        app(EventNotificationService::class)->notifyStudentLedgerRecorded(
+                            $ledger->fresh(['enrollment.student.user', 'enrollment.student.profile', 'enrollment.student.parents.user', 'enrollment.section.class', 'enrollment.classModel', 'enrollment.academicYear']),
+                            'Transport charge added',
+                            'A transport charge has been added to the student account.'
+                        );
+                    });
                 }
 
                 $results[] = [

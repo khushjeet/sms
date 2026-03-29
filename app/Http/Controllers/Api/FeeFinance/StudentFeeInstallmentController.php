@@ -6,6 +6,7 @@ use App\Models\Enrollment;
 use App\Models\FeeInstallment;
 use App\Models\StudentFeeInstallment;
 use App\Models\StudentFeeLedger;
+use App\Services\Email\EventNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -63,8 +64,9 @@ class StudentFeeInstallmentController extends Controller
             ->select(['id'])
             ->chunkById(500, function ($enrollments) use ($installment, $actorId, $now, $amount, &$assignedCount) {
                 $enrollmentIds = $enrollments->pluck('id')->all();
+                $createdLedgerReferenceIds = [];
 
-                DB::transaction(function () use ($enrollmentIds, $installment, $actorId, $now, $amount, &$assignedCount) {
+                DB::transaction(function () use ($enrollmentIds, $installment, $actorId, $now, $amount, &$assignedCount, &$createdLedgerReferenceIds) {
                     $existingEnrollmentIds = DB::table('enrollment_fee_installments')
                         ->where('fee_installment_id', $installment->id)
                         ->whereIn('enrollment_id', $enrollmentIds)
@@ -128,10 +130,30 @@ class StudentFeeInstallmentController extends Controller
 
                     if (!empty($ledgerRows)) {
                         DB::table('student_fee_ledger')->insert($ledgerRows);
+                        $createdLedgerReferenceIds = array_merge(
+                            $createdLedgerReferenceIds,
+                            $assignmentsMissingLedger->pluck('id')->map(fn ($id) => (int) $id)->all()
+                        );
                     }
 
                     $assignedCount += count($assignmentsMissingLedger);
                 });
+
+                if (!empty($createdLedgerReferenceIds)) {
+                    DB::afterCommit(function () use ($createdLedgerReferenceIds) {
+                        StudentFeeLedger::query()
+                            ->where('reference_type', 'fee_installment')
+                            ->whereIn('reference_id', $createdLedgerReferenceIds)
+                            ->get()
+                            ->each(function (StudentFeeLedger $ledger) {
+                                app(EventNotificationService::class)->notifyStudentLedgerRecorded(
+                                    $ledger->fresh(['enrollment.student.user', 'enrollment.student.profile', 'enrollment.student.parents.user', 'enrollment.section.class', 'enrollment.classModel', 'enrollment.academicYear']),
+                                    'Installment charge added',
+                                    'A new installment charge has been added to the student account.'
+                                );
+                            });
+                    });
+                }
             });
 
         // Note: we intentionally return "assigned_count" as the number of new charges posted.
@@ -283,6 +305,14 @@ class StudentFeeInstallmentController extends Controller
 
             AuditLog::log('create', $assignment, null, $assignment->toArray(), 'Student fee installment assigned');
             AuditLog::log('create', $ledger, null, $ledger->toArray(), 'Ledger debit created from installment');
+
+            DB::afterCommit(function () use ($ledger) {
+                app(EventNotificationService::class)->notifyStudentLedgerRecorded(
+                    $ledger->fresh(['enrollment.student.user', 'enrollment.student.profile', 'enrollment.student.parents.user', 'enrollment.section.class', 'enrollment.classModel', 'enrollment.academicYear']),
+                    'Installment charge added',
+                    'A new installment charge has been added to the student account.'
+                );
+            });
 
             return response()->json([
                 'assignment' => $assignment,

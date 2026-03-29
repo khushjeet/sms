@@ -5,6 +5,7 @@ namespace App\Services\StudentDashboard;
 use App\Models\Attendance;
 use App\Models\AttendanceMonthlySummary;
 use App\Models\Enrollment;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 
 class AttendanceWidgetService
@@ -37,6 +38,32 @@ class AttendanceWidgetService
                 ->where('month', $month)
                 ->first();
 
+            $monthStart = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+            $monthEnd = $monthStart->copy()->endOfMonth();
+
+            if (!$summary) {
+                $monthAttendances = Attendance::query()
+                    ->where('enrollment_id', (int) $enrollment->id)
+                    ->whereBetween('date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+                    ->get(['status']);
+
+                $presentCount = $monthAttendances->where('status', 'present')->count();
+                $absentCount = $monthAttendances->where('status', 'absent')->count();
+                $leaveCount = $monthAttendances->where('status', 'leave')->count();
+                $halfDayCount = $monthAttendances->where('status', 'half_day')->count();
+                $totalCount = $monthAttendances->count();
+                $attendancePercentage = $totalCount > 0
+                    ? round((($presentCount + $halfDayCount) / $totalCount) * 100, 2)
+                    : 0;
+            } else {
+                $presentCount = (int) $summary->present_count;
+                $absentCount = (int) $summary->absent_count;
+                $leaveCount = (int) $summary->leave_count;
+                $halfDayCount = (int) $summary->half_day_count;
+                $totalCount = (int) $summary->total_count;
+                $attendancePercentage = (float) $summary->attendance_percentage;
+            }
+
             $last7 = Attendance::query()
                 ->where('enrollment_id', (int) $enrollment->id)
                 ->orderByDesc('date')
@@ -50,13 +77,13 @@ class AttendanceWidgetService
 
             return [
                 'month' => $month,
-                'monthly_percentage' => (float) ($summary?->attendance_percentage ?? 0),
-                'total_present' => (int) ($summary?->present_count ?? 0),
-                'total_absent' => (int) ($summary?->absent_count ?? 0),
-                'total_leave' => (int) ($summary?->leave_count ?? 0),
-                'total_half_day' => (int) ($summary?->half_day_count ?? 0),
+                'monthly_percentage' => $attendancePercentage,
+                'total_present' => $presentCount,
+                'total_absent' => $absentCount,
+                'total_leave' => $leaveCount,
+                'total_half_day' => $halfDayCount,
                 'last_7_days' => $last7,
-                'source' => 'attendance_monthly_summaries',
+                'source' => $summary ? 'attendance_monthly_summaries' : 'attendances',
             ];
         });
     }

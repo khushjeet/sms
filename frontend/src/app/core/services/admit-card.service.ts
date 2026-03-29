@@ -50,6 +50,10 @@ export class AdmitCardService {
     return this.api.getBlob(`admits/${admitCardId}/paper/download`);
   }
 
+  downloadPaperByUrl(downloadUrl: string) {
+    return this.api.getBlob(downloadUrl);
+  }
+
   generate(payload: {
     exam_session_id: number;
     reason?: string;

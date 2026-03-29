@@ -33,6 +33,16 @@
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
 }
 
+.detail-line {
+  display: grid;
+  gap: 4px;
+}
+
+.detail-line span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .stack {
   display: grid;
   gap: 10px;

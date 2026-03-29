@@ -1,11 +1,22 @@
 <div class="published-results">
   <div class="published-results__header">
-    <h2>{{ isTeacher() ? 'Download Student Results' : 'Published Result' }}</h2>
-    <p>{{ isTeacher() ? 'View and download result papers for your allocated classes.' : 'View published records and generate result paper.' }}</p>
+    <div>
+      <p class="published-results__eyebrow">Published Results</p>
+      <h2>{{ isTeacher() ? 'Download Student Results' : 'Published Result' }}</h2>
+      <p>{{ isTeacher() ? 'View and download result papers for your allocated classes.' : 'View published records and generate result paper.' }}</p>
+    </div>
+    <div class="published-results__grade-card">
+      <span>Grading System</span>
+      <strong>Premium Performance Scale</strong>
+      <small>Live grade badges now appear on each published result.</small>
+    </div>
   </div>
 
   <p class="error" *ngIf="error()">{{ error() }}</p>
   <p class="success" *ngIf="message()">{{ message() }}</p>
+  <p class="error" *ngIf="!error() && !loading() && rows().length === 0 && isStudentOrParentPortal() && hiddenResultNotice()">
+    {{ hiddenResultNotice() }}
+  </p>
 
   <div class="publish-panel" *ngIf="canPublish()">
     <h3>Class-wise Publish</h3>
@@ -36,6 +47,37 @@
         {{ publishingClass() ? 'Publishing...' : 'Publish Class-wise Result' }}
       </button>
     </div>
+
+    <div class="missing-panel" *ngIf="missingStudents().length > 0">
+      <h4>Students Missing Finalized Marks</h4>
+      <p>These students are preventing result publication for the selected class/date.</p>
+      <div class="missing-table">
+        <div class="missing-table__row missing-table__row--head">
+          <span>Roll</span>
+          <span>Admission</span>
+          <span>Student</span>
+          <span>Section</span>
+          <span>Missing Subjects</span>
+        </div>
+        <div class="missing-table__row" *ngFor="let item of missingStudents()">
+          <span>{{ item.roll_number || '-' }}</span>
+          <span>{{ item.admission_number || '-' }}</span>
+          <span>{{ item.student_name }}</span>
+          <span>{{ item.section_name || '-' }}</span>
+          <span class="missing-subjects">
+            <button
+              type="button"
+              class="fix-btn"
+              *ngFor="let subject of item.missing_subjects || []"
+              (click)="fixMissingStudentMarks(item, subject.subject_id)"
+            >
+              {{ subject.subject_name || 'Subject' }} ({{ subject.subject_code || '-' }})
+            </button>
+            <span *ngIf="!(item.missing_subjects?.length)">Enrollment #{{ item.enrollment_id }}</span>
+          </span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="filters">
@@ -47,6 +89,20 @@
     <button type="button" (click)="loadPublished()" [disabled]="loading()">
       {{ loading() ? 'Loading...' : 'Load Published Result' }}
     </button>
+  </div>
+
+  <div class="grade-scale" *ngIf="showGradeBands()">
+    <div class="grade-scale__head">
+      <h3>Grade Bands</h3>
+      <p>Elegant grade mapping for fast interpretation of student performance.</p>
+    </div>
+    <div class="grade-scale__list">
+      <div class="grade-pill" *ngFor="let item of gradeScale" [attr.data-tone]="gradeTone(item.grade)">
+        <strong>{{ item.grade }}</strong>
+        <span>{{ item.minPercentage }}%+</span>
+        <small>{{ item.label }}</small>
+      </div>
+    </div>
   </div>
 
   <div class="table" *ngIf="rows().length > 0">
@@ -62,19 +118,33 @@
 
     <div class="table__row" *ngFor="let row of rows()">
       <span>{{ row.serial_number }}</span>
-      <span>{{ row.student_name }}</span>
+      <span>
+        <strong>{{ row.student_name }}</strong>
+        <small class="table__subline">Published {{ row.published_at ? (row.published_at | date: 'mediumDate') : 'recently' }}</small>
+      </span>
       <span>{{ row.enrollment_number || '-' }} / {{ row.registration_number || '-' }}</span>
       <span>{{ row.exam_name || '-' }}</span>
       <span>{{ row.class_name || '-' }}</span>
-      <span>
-        {{ row.result_status }} ({{ row.percentage | number: '1.2-2' }}%)
-        <br />
-        <small>Visibility: {{ row.visibility_status }}</small>
+      <span class="result-cell">
+        <span class="result-chip" [attr.data-tone]="gradeTone(gradeForRow(row), row.result_status)">
+          {{ statusLabel(row.result_status) }}
+        </span>
+        <span class="grade-chip" [attr.data-tone]="gradeTone(gradeForRow(row), row.result_status)">
+          Grade {{ gradeForRow(row) }}
+        </span>
+        <small>{{ row.percentage | number: '1.2-2' }}% | {{ gradeLabel(gradeForRow(row)) }}</small>
+        <small>Visibility: {{ statusLabel(row.visibility_status) }}</small>
       </span>
       <span>
         <div class="row-actions">
           <button type="button" (click)="viewPaper(row)" [disabled]="loadingPaper()">
             {{ loadingPaper() ? 'Loading...' : 'Result Paper' }}
+          </button>
+          <button type="button" class="print" (click)="downloadRowPaperPdf(row)" [disabled]="loadingPaper() || generatingPdf()">
+            {{ generatingPdf() ? 'Preparing...' : 'Download PDF' }}
+          </button>
+          <button type="button" class="print" (click)="printRowPaperPdf(row)" [disabled]="loadingPaper() || generatingPdf()">
+            {{ generatingPdf() ? 'Preparing...' : 'Print PDF' }}
           </button>
           <button
             *ngIf="canPublish() && row.visibility_status === 'visible'"
@@ -99,14 +169,40 @@
     </div>
   </div>
 
-  <p *ngIf="!loading() && rows().length === 0">No published results found.</p>
+  <p *ngIf="!loading() && rows().length === 0 && !(isStudentOrParentPortal() && hiddenResultNotice())">No published results found.</p>
 
   <div class="paper" *ngIf="selectedPaper() as payload">
     <div class="paper__head">
-      <h3>Result Paper Preview</h3>
+      <div>
+        <p class="paper__eyebrow">Premium Result View</p>
+        <h3>Result Paper Preview</h3>
+      </div>
       <div class="paper__actions">
-      <button type="button" class="print" (click)="printPaper()">Download / Print</button>
+        <button type="button" class="print" (click)="downloadPaperPdf()" [disabled]="generatingPdf()">
+          {{ generatingPdf() ? 'Preparing...' : 'Download PDF' }}
+        </button>
+        <button type="button" class="print" (click)="printPaperPdf()" [disabled]="generatingPdf()">
+          {{ generatingPdf() ? 'Preparing...' : 'Print PDF' }}
+        </button>
         <button type="button" class="close" (click)="closePaper()">Close</button>
+      </div>
+    </div>
+
+    <div class="paper__summary">
+      <div class="paper__highlight">
+        <span>Overall Grade</span>
+        <strong>{{ gradeForPaper() }}</strong>
+        <small>{{ gradeLabel(gradeForPaper()) }}</small>
+      </div>
+      <div class="paper__highlight">
+        <span>Result</span>
+        <strong>{{ statusLabel(payload.result_paper.result_status) }}</strong>
+        <small>{{ payload.result_paper.percentage | number: '1.2-2' }}% overall score</small>
+      </div>
+      <div class="paper__highlight">
+        <span>Rank</span>
+        <strong>{{ payload.result_paper.rank || '-' }}</strong>
+        <small>Across the published result list</small>
       </div>
     </div>
 
@@ -116,10 +212,35 @@
       <div><strong>Student:</strong> {{ payload.result_paper.student_name }}</div>
       <div><strong>Parent:</strong> {{ payload.result_paper.parents_name || '-' }}</div>
       <div><strong>Address:</strong> {{ payload.result_paper.address || '-' }}</div>
+      <div><strong>Roll Number:</strong> {{ payload.result_paper.roll_number || payload.result_paper.enrollment_number || '-' }}</div>
       <div><strong>Serial:</strong> {{ payload.result_paper.serial_number }}</div>
       <div><strong>Enrollment/Reg:</strong> {{ payload.result_paper.enrollment_number || '-' }} / {{ payload.result_paper.registration_number || '-' }}</div>
-      <div><strong>Verify URL:</strong> {{ payload.result_paper.qr_verify_url }}</div>
+      <div><strong>Rank:</strong> {{ payload.result_paper.rank || '-' }}</div>
+      <div><strong>Grade:</strong> {{ gradeForPaper() }} ({{ gradeLabel(gradeForPaper()) }})</div>
+      <div><strong>Verification:</strong> Scan QR code</div>
     </div>
-    <p class="paper__legend"><strong>A</strong> = Absent</p>
+
+    <div class="paper__footer-block">
+      <div class="paper__section-card">
+        <strong>Eight point grading scale :</strong>
+        <p>{{ eightPointGradeScaleText() }}</p>
+      </div>
+
+      <div class="paper__section-card">
+        <strong>CLASS TEACHER'S REMARKS</strong>
+        <p>Promotion granted -</p>
+        <p>Date : 20/03/2026</p>
+        <div class="paper__signatures">
+          <span>Signature Of Teacher</span>
+          <span>Signature Of Principal</span>
+        </div>
+        <p class="paper__disclaimer">
+          Disclaimer : This is a computer generated statement and hence no signature is required.
+          The school is not responsible for any inadvertent error that may have crept in the certificate being generated.
+        </p>
+      </div>
+    </div>
+
+    <p class="paper__legend"><strong>ABS</strong> = Absent</p>
   </div>
 </div>

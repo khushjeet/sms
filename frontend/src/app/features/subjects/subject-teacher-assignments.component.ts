@@ -4,11 +4,13 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { AcademicYearsService } from '../../core/services/academic-years.service';
+import { ClassesService } from '../../core/services/classes.service';
 import { ExamConfigurationsService } from '../../core/services/exam-configurations.service';
 import { SectionsService } from '../../core/services/sections.service';
 import { SubjectsService } from '../../core/services/subjects.service';
 import { TeachersService } from '../../core/services/teachers.service';
 import { AcademicYear } from '../../models/academic-year';
+import { ClassModel } from '../../models/class';
 import { ExamConfiguration } from '../../models/exam-configuration';
 import { Section } from '../../models/section';
 import { Subject, SubjectTeacherAssignment } from '../../models/subject';
@@ -25,6 +27,7 @@ export class SubjectTeacherAssignmentsComponent {
   private readonly subjectsService = inject(SubjectsService);
   private readonly teachersService = inject(TeachersService);
   private readonly sectionsService = inject(SectionsService);
+  private readonly classesService = inject(ClassesService);
   private readonly academicYearsService = inject(AcademicYearsService);
   private readonly examConfigurationsService = inject(ExamConfigurationsService);
   private readonly fb = inject(FormBuilder);
@@ -36,6 +39,7 @@ export class SubjectTeacherAssignmentsComponent {
 
   readonly subjects = signal<Subject[]>([]);
   readonly teachers = signal<Teacher[]>([]);
+  readonly classes = signal<ClassModel[]>([]);
   readonly sections = signal<Section[]>([]);
   readonly academicYears = signal<AcademicYear[]>([]);
   readonly examConfigurations = signal<ExamConfiguration[]>([]);
@@ -45,17 +49,23 @@ export class SubjectTeacherAssignmentsComponent {
 
   readonly filteredSections = computed(() => {
     const yearId = Number(this.form.controls.academic_year_id.value || 0);
-    if (!yearId) {
-      return this.sections();
-    }
-    return this.sections().filter((section) => Number(section.academic_year_id) === yearId);
+    const classId = Number(this.form.controls.class_id.value || 0);
+
+    return this.sections().filter((section) => {
+      const matchesYear = !yearId || Number(section.academic_year_id) === yearId;
+      const matchesClass = !classId || Number(section.class_id) === classId;
+      return matchesYear && matchesClass;
+    });
   });
+
+  readonly hasSectionsForSelection = computed(() => this.filteredSections().length > 0);
 
   readonly form = this.fb.nonNullable.group({
     subject_id: ['', Validators.required],
     academic_year_id: ['', Validators.required],
     academic_year_exam_config_id: ['', Validators.required],
-    section_id: ['', Validators.required],
+    class_id: ['', Validators.required],
+    section_id: [''],
     teacher_ids: this.fb.nonNullable.control<string[]>([], [Validators.required]),
   });
 
@@ -70,12 +80,14 @@ export class SubjectTeacherAssignmentsComponent {
     forkJoin({
       subjects: this.subjectsService.list({ per_page: 300, status: 'active' }),
       teachers: this.teachersService.list({ per_page: 300, status: 'active' }),
+      classes: this.classesService.list({ status: 'active', per_page: 250 }),
       sections: this.sectionsService.list({ per_page: 400, status: 'active' }),
       academicYears: this.academicYearsService.list({ per_page: 200 })
     }).subscribe({
-      next: ({ subjects, teachers, sections, academicYears }) => {
+      next: ({ subjects, teachers, classes, sections, academicYears }) => {
         this.subjects.set(subjects.data || []);
         this.teachers.set(teachers.data || []);
+        this.classes.set(classes.data || []);
         this.sections.set(sections.data || []);
         this.academicYears.set(academicYears.data || []);
         this.loading.set(false);
@@ -117,10 +129,11 @@ export class SubjectTeacherAssignmentsComponent {
 
     const raw = this.form.getRawValue();
     const subjectId = Number(raw.subject_id);
+    const classId = Number(raw.class_id);
     const teacherIds = (raw.teacher_ids || []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0);
 
-    if (!subjectId || teacherIds.length === 0) {
-      this.error.set('Select a subject and at least one teacher.');
+    if (!subjectId || !classId || teacherIds.length === 0) {
+      this.error.set('Select a subject, class, and at least one teacher.');
       return;
     }
 
@@ -130,7 +143,8 @@ export class SubjectTeacherAssignmentsComponent {
 
     this.subjectsService.assignTeachers(subjectId, {
       teacher_ids: teacherIds,
-      section_id: Number(raw.section_id),
+      class_id: classId,
+      section_id: raw.section_id ? Number(raw.section_id) : null,
       academic_year_id: Number(raw.academic_year_id),
       academic_year_exam_config_id: Number(raw.academic_year_exam_config_id),
     }).subscribe({
@@ -198,6 +212,13 @@ export class SubjectTeacherAssignmentsComponent {
     }
 
     this.loadExamConfigurations(academicYearId);
+  }
+
+  onClassChange(classIdValue: string) {
+    this.form.patchValue({
+      class_id: classIdValue,
+      section_id: '',
+    });
   }
 
   private loadAssignments(subjectId: number) {

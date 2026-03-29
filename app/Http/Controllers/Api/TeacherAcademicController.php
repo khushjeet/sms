@@ -7,6 +7,7 @@ use App\Models\AcademicYearExamConfig;
 use App\Models\Attendance;
 use App\Models\Enrollment;
 use App\Models\TeacherMark;
+use App\Services\InAppNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -20,13 +21,13 @@ class TeacherAcademicController extends Controller
 
         $rows = DB::table('teacher_subject_assignments as tsa')
             ->join('subjects as sub', 'sub.id', '=', 'tsa.subject_id')
-            ->join('sections as sec', 'sec.id', '=', 'tsa.section_id')
-            ->join('classes as cls', 'cls.id', '=', 'sec.class_id')
+            ->leftJoin('sections as sec', 'sec.id', '=', 'tsa.section_id')
+            ->join('classes as cls', 'cls.id', '=', 'tsa.class_id')
             ->join('academic_years as ay', 'ay.id', '=', 'tsa.academic_year_id')
             ->leftJoin('academic_year_exam_configs as tsaec', 'tsaec.id', '=', 'tsa.academic_year_exam_config_id')
             ->leftJoin('class_subjects as cs', function ($join) {
                 $join->on('cs.subject_id', '=', 'tsa.subject_id')
-                    ->on('cs.class_id', '=', 'sec.class_id')
+                    ->on('cs.class_id', '=', 'tsa.class_id')
                     ->on('cs.academic_year_id', '=', 'tsa.academic_year_id');
             })
             ->leftJoin('academic_year_exam_configs as aec', 'aec.id', '=', 'cs.academic_year_exam_config_id')
@@ -59,12 +60,12 @@ class TeacherAcademicController extends Controller
                 return [
                     'id' => (int) $row->id,
                     'subject_id' => (int) $row->subject_id,
-                    'section_id' => (int) $row->section_id,
+                    'section_id' => $row->section_id !== null ? (int) $row->section_id : null,
                     'class_id' => (int) $row->class_id,
                     'academic_year_id' => (int) $row->academic_year_id,
                     'subject_name' => $row->subject_name,
                     'subject_code' => $row->subject_code ?: $row->code,
-                    'section_name' => $row->section_name,
+                    'section_name' => $row->section_name ?: 'All Sections',
                     'class_name' => $row->class_name,
                     'academic_year_name' => $row->academic_year_name,
                     'mapped_max_marks' => $row->mapped_max_marks !== null ? (float) $row->mapped_max_marks : null,
@@ -89,7 +90,7 @@ class TeacherAcademicController extends Controller
         ]);
 
         $assignment = $this->resolveAssignment($teacherId, (int) $validated['assignment_id']);
-        $rows = $this->sectionEnrollmentRows((int) $assignment->section_id);
+        $rows = $this->assignmentEnrollmentRows($assignment);
         $attendanceByEnrollment = Attendance::query()
             ->whereDate('date', $validated['date'])
             ->whereIn('enrollment_id', $rows->pluck('enrollment_id')->all())
@@ -122,9 +123,8 @@ class TeacherAcademicController extends Controller
         ]);
 
         $assignment = $this->resolveAssignment($teacherId, (int) $validated['assignment_id']);
-        $allowedEnrollmentIds = Enrollment::query()
-            ->where('section_id', (int) $assignment->section_id)
-            ->pluck('id')
+        $allowedEnrollmentIds = $this->assignmentEnrollmentRows($assignment)
+            ->pluck('enrollment_id')
             ->map(fn ($id) => (int) $id)
             ->all();
 
@@ -141,7 +141,9 @@ class TeacherAcademicController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($validated, $teacherId) {
+        $processedCount = 0;
+
+        DB::transaction(function () use ($validated, $teacherId, &$processedCount) {
             foreach ($validated['attendances'] as $item) {
                 $existing = Attendance::query()
                     ->where('enrollment_id', (int) $item['enrollment_id'])
@@ -164,8 +166,23 @@ class TeacherAcademicController extends Controller
                         'marked_at' => now(),
                     ]
                 );
+
+                $processedCount++;
             }
         });
+
+        $actor = $request->user();
+        if ($actor && $processedCount > 0) {
+            app(InAppNotificationService::class)->notifyStudentAttendanceMarked(
+                $actor,
+                [
+                    'class_id' => (int) $assignment->class_id,
+                    'section_id' => $assignment->section_id !== null ? (int) $assignment->section_id : null,
+                ],
+                (string) $validated['date'],
+                $processedCount
+            );
+        }
 
         return response()->json([
             'message' => 'Attendance saved successfully.',
@@ -188,7 +205,7 @@ class TeacherAcademicController extends Controller
         );
         $this->assertMappedExamConfiguration($assignment, (int) $examConfig->id);
         $markedOn = $validated['marked_on'] ?? now()->toDateString();
-        $rows = $this->sectionEnrollmentRows((int) $assignment->section_id);
+        $rows = $this->assignmentEnrollmentRows($assignment);
 
         $marks = TeacherMark::query()
             ->where('teacher_id', $teacherId)
@@ -237,9 +254,8 @@ class TeacherAcademicController extends Controller
             (int) $validated['exam_configuration_id']
         );
         $this->assertMappedExamConfiguration($assignment, (int) $examConfig->id);
-        $allowedEnrollmentIds = Enrollment::query()
-            ->where('section_id', (int) $assignment->section_id)
-            ->pluck('id')
+        $allowedEnrollmentIds = $this->assignmentEnrollmentRows($assignment)
+            ->pluck('enrollment_id')
             ->map(fn ($id) => (int) $id)
             ->all();
 
@@ -303,10 +319,10 @@ class TeacherAcademicController extends Controller
     private function resolveAssignment(int $teacherId, int $assignmentId): object
     {
         $assignment = DB::table('teacher_subject_assignments as tsa')
-            ->join('sections as sec', 'sec.id', '=', 'tsa.section_id')
+            ->leftJoin('sections as sec', 'sec.id', '=', 'tsa.section_id')
             ->leftJoin('class_subjects as cs', function ($join) {
                 $join->on('cs.subject_id', '=', 'tsa.subject_id')
-                    ->on('cs.class_id', '=', 'sec.class_id')
+                    ->on('cs.class_id', '=', 'tsa.class_id')
                     ->on('cs.academic_year_id', '=', 'tsa.academic_year_id');
             })
             ->where('tsa.id', $assignmentId)
@@ -314,6 +330,7 @@ class TeacherAcademicController extends Controller
             ->select(
                 'tsa.id',
                 'tsa.teacher_id',
+                'tsa.class_id',
                 'tsa.subject_id',
                 'tsa.section_id',
                 'tsa.academic_year_id',
@@ -361,14 +378,21 @@ class TeacherAcademicController extends Controller
         }
     }
 
-    private function sectionEnrollmentRows(int $sectionId): Collection
+    private function assignmentEnrollmentRows(object $assignment): Collection
     {
-        return Enrollment::query()
+        $query = Enrollment::query()
             ->with('student.user')
-            ->where('section_id', $sectionId)
+            ->where('academic_year_id', (int) $assignment->academic_year_id)
             ->where('status', 'active')
-            ->orderBy('roll_number')
-            ->get()
+            ->orderBy('roll_number');
+
+        if ($assignment->section_id !== null) {
+            $query->where('section_id', (int) $assignment->section_id);
+        } else {
+            $query->where('class_id', (int) $assignment->class_id);
+        }
+
+        return $query->get()
             ->map(function (Enrollment $enrollment) {
                 return [
                     'enrollment_id' => (int) $enrollment->id,

@@ -67,7 +67,13 @@ export class SubjectsService {
 
   assignTeachers(
     subjectId: number,
-    payload: { teacher_ids: number[]; section_id: number; academic_year_id: number; academic_year_exam_config_id: number }
+    payload: {
+      teacher_ids: number[];
+      class_id: number;
+      section_id?: number | null;
+      academic_year_id: number;
+      academic_year_exam_config_id: number;
+    }
   ) {
     return this.api.post<{ message: string }>(`subjects/${subjectId}/teacher-assignments`, payload);
   }

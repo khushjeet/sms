@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { LoginComponent } from './features/auth/login.component';
+import { PasswordResetComponent } from './features/auth/password-reset.component';
 import { AppShellComponent } from './layout/app-shell.component';
 import { DashboardComponent } from './features/dashboard/dashboard.component';
 import { authGuard } from './core/guards/auth.guard';
@@ -28,6 +29,7 @@ import { FinanceComponent } from './features/finance/finance.component';
 import { HrPayrollComponent } from './features/hr-payroll/hr-payroll.component';
 import { AttendanceComponent } from './features/attendance/attendance.component';
 import { ExpensesComponent } from './features/expenses/expenses.component';
+import { SignatureUploadComponent } from './features/signature-upload/signature-upload.component';
 import { TeachersListComponent } from './features/teachers/teachers-list.component';
 import { TeacherDetailComponent } from './features/teachers/teacher-detail.component';
 import { TeacherFormComponent } from './features/teachers/teacher-form.component';
@@ -36,13 +38,22 @@ import { EmployeeDetailComponent } from './features/employees/employee-detail.co
 import { EmployeeFormComponent } from './features/employees/employee-form.component';
 import { TeacherAssignMarksComponent } from './features/teacher-academics/teacher-assign-marks.component';
 import { TeacherMarkAttendanceComponent } from './features/teacher-academics/teacher-mark-attendance.component';
+import { TeacherAssignedTimetableComponent } from './features/teacher-academics/teacher-assigned-timetable.component';
 import { AdminAssignMarksComponent } from './features/admin-marks/admin-assign-marks.component';
 import { PublishedResultsComponent } from './features/results/published-results.component';
 import { AdmitManagementComponent } from './features/admits/admit-management.component';
 import { StudentPortalSectionComponent } from './features/student-portal/student-portal-section.component';
+import { TimetableManagementComponent } from './features/timetable/timetable-management.component';
+import { CredentialsComponent } from './features/credentials/credentials.component';
+import { MessageCenterComponent } from './features/message-center/message-center.component';
+import { AuditDownloadsComponent } from './features/audit-downloads/audit-downloads.component';
+import { PhaseTwoComponent } from './features/phase-two/phase-two.component';
+import { EventsComponent } from './features/events/events.component';
+import { NotificationsPageComponent } from './features/notifications/notifications-page.component';
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
+  { path: 'password-reset/:token', component: PasswordResetComponent },
   {
     path: '',
     component: AppShellComponent,
@@ -53,7 +64,7 @@ export const routes: Routes = [
       {
         path: 'students',
         canActivate: [roleGuard],
-        data: { roles: ['super_admin', 'school_admin', 'parent'] },
+        data: { roles: ['super_admin', 'school_admin'] },
         children: [
           { path: '', component: StudentsListComponent },
           {
@@ -198,6 +209,36 @@ export const routes: Routes = [
         data: { roles: ['super_admin'] }
       },
       {
+        path: 'admin/timetable',
+        component: TimetableManagementComponent,
+        canActivate: [roleGuard],
+        data: { roles: ['super_admin'] }
+      },
+      {
+        path: 'admin/send-message',
+        component: MessageCenterComponent,
+        canActivate: [roleGuard],
+        data: { roles: ['super_admin'] }
+      },
+      {
+        path: 'admin/audit-downloads',
+        component: AuditDownloadsComponent,
+        canActivate: [roleGuard],
+        data: { roles: ['super_admin'] }
+      },
+      {
+        path: 'admin/phase-2',
+        component: PhaseTwoComponent,
+        canActivate: [roleGuard],
+        data: { roles: ['super_admin'] }
+      },
+      {
+        path: 'admin/events',
+        component: EventsComponent,
+        canActivate: [roleGuard],
+        data: { roles: ['super_admin'] }
+      },
+      {
         path: 'teacher/assign-marks',
         component: TeacherAssignMarksComponent,
         canActivate: [roleGuard],
@@ -212,6 +253,12 @@ export const routes: Routes = [
       {
         path: 'teacher/mark-attendance',
         component: TeacherMarkAttendanceComponent,
+        canActivate: [roleGuard],
+        data: { roles: ['teacher'] }
+      },
+      {
+        path: 'teacher/timetable',
+        component: TeacherAssignedTimetableComponent,
         canActivate: [roleGuard],
         data: { roles: ['teacher'] }
       },
@@ -234,10 +281,26 @@ export const routes: Routes = [
         data: { roles: ['super_admin', 'school_admin', 'accountant'] }
       },
       {
-        path: 'student/admit-card',
-        component: StudentPortalSectionComponent,
+        path: 'signature-upload',
+        component: SignatureUploadComponent,
         canActivate: [roleGuard],
-        data: { roles: ['student'], title: 'Admit Card', section: 'admit-card' }
+        data: { roles: ['super_admin', 'school_admin', 'accountant'] }
+      },
+      {
+        path: 'credentials',
+        component: CredentialsComponent,
+        canActivate: [roleGuard],
+        data: { roles: ['super_admin'] }
+      },
+      {
+        path: 'notifications',
+        component: NotificationsPageComponent
+      },
+      {
+        path: 'student/admit-card',
+        component: AdmitManagementComponent,
+        canActivate: [roleGuard],
+        data: { roles: ['student'] }
       },
       {
         path: 'student/fee',
@@ -247,9 +310,15 @@ export const routes: Routes = [
       },
       {
         path: 'student/result',
-        component: StudentPortalSectionComponent,
+        component: PublishedResultsComponent,
         canActivate: [roleGuard],
-        data: { roles: ['student'], title: 'Result', section: 'result' }
+        data: { roles: ['student'] }
+      },
+      {
+        path: 'parent/result',
+        component: PublishedResultsComponent,
+        canActivate: [roleGuard],
+        data: { roles: ['parent'] }
       },
       {
         path: 'student/timetable',

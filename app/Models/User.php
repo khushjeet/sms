@@ -12,11 +12,20 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
+
+    private static ?bool $rbacReadyCache = null;
+
+    private ?array $activeRoleNamesCache = null;
+
+    private ?array $permissionCodesCache = null;
+
+    private array $moduleAccessCache = [];
 
     /**
      * The attributes that are mass assignable.
@@ -43,6 +52,16 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+    ];
+
+    /**
+     * The accessors to append to the model's array form.
+     *
+     * @var list<string>
+     */
+    protected $appends = [
+        'full_name',
+        'avatar_url',
     ];
 
     /**
@@ -257,14 +276,7 @@ class User extends Authenticatable
         $requiredRoles = is_array($roles) ? $roles : [$roles];
 
         if ($this->isRbacReady()) {
-            $activeRoleNames = $this->roles()
-                ->where(function ($query) {
-                    $query->whereNull('user_roles.expires_at')
-                        ->orWhere('user_roles.expires_at', '>', now());
-                })
-                ->pluck('name')
-                ->all();
-
+            $activeRoleNames = $this->getCachedActiveRoleNames();
             if (!empty($activeRoleNames)) {
                 return !empty(array_intersect($requiredRoles, $activeRoleNames));
             }
@@ -298,6 +310,8 @@ class User extends Authenticatable
                 ],
             ]);
         });
+
+        $this->flushAuthorizationCache();
     }
 
     public function syncLegacyRoleIntoRbac(): void
@@ -319,29 +333,13 @@ class User extends Authenticatable
             return false;
         }
 
-        return Permission::query()
-            ->where('code', $code)
-            ->whereHas('roles.users', function (Builder $query): void {
-                $query->where('users.id', $this->id)
-                    ->where(function (Builder $sub): void {
-                        $sub->whereNull('user_roles.expires_at')
-                            ->orWhere('user_roles.expires_at', '>', now());
-                    });
-            })
-            ->exists();
+        return in_array($code, $this->getCachedPermissionCodes(), true);
     }
 
     public function getRoleNames(): array
     {
         if ($this->isRbacReady()) {
-            $roles = $this->roles()
-                ->where(function (Builder $query): void {
-                    $query->whereNull('user_roles.expires_at')
-                        ->orWhere('user_roles.expires_at', '>', now());
-                })
-                ->pluck('name')
-                ->all();
-
+            $roles = $this->getCachedActiveRoleNames();
             if (!empty($roles)) {
                 return $roles;
             }
@@ -385,10 +383,29 @@ class User extends Authenticatable
         return $this->first_name . ' ' . $this->last_name;
     }
 
+    public function getAvatarUrlAttribute(): ?string
+    {
+        $avatar = trim((string) ($this->avatar ?? ''));
+
+        if ($avatar === '') {
+            return null;
+        }
+
+        if (str_starts_with($avatar, 'http://') || str_starts_with($avatar, 'https://')) {
+            return $avatar;
+        }
+
+        return Storage::disk('public')->url(ltrim($avatar, '/'));
+    }
+
     public function canAccessModule(string $module): bool
     {
+        if (array_key_exists($module, $this->moduleAccessCache)) {
+            return $this->moduleAccessCache[$module];
+        }
+
         if ($this->isSuperAdmin()) {
-            return true;
+            return $this->moduleAccessCache[$module] = true;
         }
 
         $expectedCodes = [
@@ -398,7 +415,7 @@ class User extends Authenticatable
 
         foreach ($expectedCodes as $code) {
             if ($this->hasPermission($code)) {
-                return true;
+                return $this->moduleAccessCache[$module] = true;
             }
         }
 
@@ -412,14 +429,58 @@ class User extends Authenticatable
         ];
         $rolePermissions = $legacyPermissions[$this->role] ?? [];
 
-        return in_array($module, $rolePermissions, true);
+        return $this->moduleAccessCache[$module] = in_array($module, $rolePermissions, true);
     }
 
     private function isRbacReady(): bool
     {
-        return Schema::hasTable('roles')
+        if (self::$rbacReadyCache !== null) {
+            return self::$rbacReadyCache;
+        }
+
+        return self::$rbacReadyCache = Schema::hasTable('roles')
             && Schema::hasTable('permissions')
             && Schema::hasTable('role_permissions')
             && Schema::hasTable('user_roles');
+    }
+
+    private function getCachedActiveRoleNames(): array
+    {
+        if ($this->activeRoleNamesCache !== null) {
+            return $this->activeRoleNamesCache;
+        }
+
+        return $this->activeRoleNamesCache = $this->roles()
+            ->where(function (Builder $query): void {
+                $query->whereNull('user_roles.expires_at')
+                    ->orWhere('user_roles.expires_at', '>', now());
+            })
+            ->pluck('name')
+            ->all();
+    }
+
+    private function getCachedPermissionCodes(): array
+    {
+        if ($this->permissionCodesCache !== null) {
+            return $this->permissionCodesCache;
+        }
+
+        return $this->permissionCodesCache = Permission::query()
+            ->whereHas('roles.users', function (Builder $query): void {
+                $query->where('users.id', $this->id)
+                    ->where(function (Builder $sub): void {
+                        $sub->whereNull('user_roles.expires_at')
+                            ->orWhere('user_roles.expires_at', '>', now());
+                    });
+            })
+            ->pluck('code')
+            ->all();
+    }
+
+    private function flushAuthorizationCache(): void
+    {
+        $this->activeRoleNamesCache = null;
+        $this->permissionCodesCache = null;
+        $this->moduleAccessCache = [];
     }
 }

@@ -59,6 +59,8 @@ export interface StudentDashboardResponse {
   result_section: {
     state: 'available' | 'blocked' | 'not_published';
     message: string | null;
+    download_url: string | null;
+    download_available: boolean;
     latest_result: {
       student_result_id: number;
       exam_name: string | null;
@@ -99,7 +101,28 @@ export interface StudentDashboardResponse {
   };
   timetable: {
     source: string;
-    items: Array<{ day: string; period: string; time: string; subject: string; teacher: string }>;
+    days: Array<{ value: string; label: string }>;
+    slots: Array<{
+      id: number;
+      name: string;
+      start_time: string;
+      end_time: string;
+      time_range: string;
+      is_break: boolean;
+      slot_order: number;
+    }>;
+    items: Array<{
+      day_key: string;
+      day: string;
+      time_slot_id: number;
+      period: string;
+      time_slot_order: number;
+      time: string;
+      is_break: boolean;
+      subject: string;
+      teacher: string;
+      room_number?: string | null;
+    }>;
   };
   academic_history: {
     source: string;

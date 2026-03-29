@@ -8,16 +8,16 @@
     <style>
         @page { size: A4 portrait; margin: 8mm; }
         * { box-sizing: border-box; font-weight: 700 !important; }
-        body { font-family: DejaVu Sans, Arial, sans-serif; margin: 0; color: #111827; position: relative; font-weight: 700; }
+        body { font-family: DejaVu Sans, Arial, sans-serif; margin: 0; color: #111827; font-weight: 700; }
 
         .watermark {
-            position: fixed;
+            position: absolute;
             top: 36%;
             left: 50%;
+            transform: translateX(-50%);
             width: 100%;
             text-align: center;
             opacity: 0.1;
-            transform: translateX(-50%);
             z-index: 0;
         }
         .watermark img {
@@ -33,15 +33,32 @@
             display: inline-block;
         }
 
-        .ips-header { border: 1px solid #111827; border-radius: 18px; background: #f3f4f6; padding: 10px 16px; }
+        .ips-header { border: 1px solid #111827; border-radius: 18px; background: #f3f4f6; padding: 10px 12px; }
+        .ips-top-meta {
+            width: 100%;
+            display: table;
+            table-layout: fixed;
+            margin-bottom: 6px;
+            font-size: 11px;
+            color: #111827;
+        }
+        .ips-top-meta-left, .ips-top-meta-right {
+            display: table-cell;
+            width: 50%;
+            vertical-align: middle;
+        }
+        .ips-top-meta-right { text-align: right; }
         .ips-header-main { width: 100%; display: table; table-layout: fixed; }
-        .ips-left, .ips-center, .ips-right { display: table-cell; vertical-align: middle; }
-        .ips-left, .ips-right { width: 96px; padding: 0; text-align: center; }
-        .ips-logo { width: 92px; height: 92px; border: 0; background: transparent; object-fit: contain; padding: 0; display: block; margin: 0; }
-        .ips-qr { width: 92px; height: 92px; border: 1px solid #d1d5db; background: #ffffff; object-fit: contain; padding: 0; display: block; margin: 0 auto; }
-        .ips-qr-fallback { width: 92px; height: 92px; border: 1px solid #d1d5db; background: #ffffff; font-size: 11px; color: #6b7280; display: flex; align-items: center; justify-content: center; margin: 0 auto; padding: 0; }
-        .ips-center { text-align: center; padding: 0 6px; }
-        .ips-name { margin: 0; font-size: 26px; font-weight: 400; text-transform: uppercase; letter-spacing: 1px; color: #123f4a; line-height: 1.15; white-space: nowrap; }
+        .ips-header-main--no-qr .ips-right { width: 1px; padding: 0; }
+        .ips-header-main--no-qr .ips-qr-fallback { display: none; }
+        .ips-left, .ips-center, .ips-right { display: table-cell; vertical-align: top; }
+        .ips-left { width: 100px; padding: 2px 8px 0 0; text-align: left; }
+        .ips-right { width: 82px; padding: 6px 0 0 8px; text-align: right; }
+        .ips-logo { width: 92px; height: 92px; border: 1px solid #d1d5db; background: #ffffff; object-fit: contain; padding: 2px; }
+        .ips-qr { width: 76px; height: 76px; border: 1px solid #d1d5db; background: #ffffff; object-fit: contain; padding: 2px; display: inline-block; }
+        .ips-qr-fallback { width: 76px; height: 76px; border: 1px solid #d1d5db; background: #ffffff; font-size: 11px; color: #6b7280; display: inline-flex; align-items: center; justify-content: center; }
+        .ips-center { text-align: center; padding: 0 4px; }
+        .ips-name { margin: 0; font-size: 26px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #123f4a; line-height: 1.15; white-space: nowrap; }
         .ips-address { margin-top: 4px; font-size: 14px; font-weight: 700; color: #111827; }
         .ips-contact { margin-top: 2px; font-size: 13px; color: #111827; font-weight: 700; line-height: 1.25; }
         .phone-line { white-space: nowrap; }
@@ -68,6 +85,13 @@
         .signatures { margin-top: 22px; width: 100%; display: table; table-layout: fixed; position: relative; z-index: 2; }
         .signature-box { display: table-cell; width: 50%; text-align: center; vertical-align: bottom; padding: 0 20px; }
         .signature-line { border-top: 1px solid #111827; height: 1px; margin-bottom: 6px; }
+        .signature-image {
+            width: 140px;
+            height: 44px;
+            object-fit: contain;
+            display: block;
+            margin: 0 auto 6px;
+        }
         .signature-label { font-size: 12px; color: #111827; font-weight: 700; }
         .content-body { position: relative; z-index: 2; }
     </style>
@@ -85,12 +109,78 @@
         $schoolWebsite = $school['website'] ?? config('school.website');
         $schoolUdise = $school['udise'] ?? config('school.udise');
         $schoolRegNo = $school['reg_no'] ?? config('school.reg_no');
-        $logoUrl = $school['logo_url'] ?? config('school.logo_url');
+        $principalSignature = $school['principal_signature_data_url'] ?? null;
+        $logoUrl = trim((string) ($school['logo_data_url'] ?? ($school['logo_url'] ?? config('school.logo_url') ?? '')));
+        $watermarkText = strtoupper((string) ($school['watermark_text'] ?? $schoolName ?: 'SCHOOL'));
+        $watermarkLogoUrl = trim((string) ($school['watermark_logo_data_url'] ?? ($school['watermark_logo_url'] ?? '')));
         $fallbackLogoPath = public_path('storage/assets/ips.png');
-        $resolvedLogo = $logoUrl ?: (file_exists($fallbackLogoPath) ? $fallbackLogoPath : null);
-        $fallbackStudentPhotoPath = public_path('storage/students/avatars/uq3WKpY7czm88YHNAkMHhjOWeecHn9FEhok5Qi3H.jpg');
-        $resolvedStudentPhoto = file_exists($fallbackStudentPhotoPath) ? $fallbackStudentPhotoPath : null;
-        $watermark = strtoupper((string) ($schoolName ?: 'SCHOOL'));
+        $resolvedLogo = null;
+        $resolvedWatermarkLogo = null;
+
+        if ($logoUrl !== '') {
+            $normalizedLogoUrl = ltrim(str_replace('\\', '/', $logoUrl), '/');
+            $looksEmbedded = preg_match('/^(data:|file:)/i', $logoUrl) === 1;
+            $publicLogoPath = public_path($normalizedLogoUrl);
+
+            if ($looksEmbedded) {
+                $resolvedLogo = $logoUrl;
+            } elseif (file_exists($publicLogoPath)) {
+                $resolvedLogo = $publicLogoPath;
+            }
+        }
+
+        if (!$resolvedLogo && file_exists($fallbackLogoPath)) {
+            $resolvedLogo = $fallbackLogoPath;
+        }
+
+        if ($watermarkLogoUrl !== '') {
+            $normalizedWatermarkLogoUrl = ltrim(str_replace('\\', '/', $watermarkLogoUrl), '/');
+            $looksEmbeddedWatermark = preg_match('/^(data:|file:)/i', $watermarkLogoUrl) === 1;
+            $publicWatermarkPath = public_path($normalizedWatermarkLogoUrl);
+
+            if ($looksEmbeddedWatermark) {
+                $resolvedWatermarkLogo = $watermarkLogoUrl;
+            } elseif (file_exists($publicWatermarkPath)) {
+                $resolvedWatermarkLogo = $publicWatermarkPath;
+            }
+        }
+
+        if (!$resolvedWatermarkLogo) {
+            $resolvedWatermarkLogo = $resolvedLogo;
+        }
+
+        $photoUrl = trim((string) ($card['photo_url'] ?? ''));
+        $resolvedStudentPhoto = null;
+
+        if ($photoUrl !== '') {
+            $normalizedPhotoUrl = ltrim(str_replace('\\', '/', $photoUrl), '/');
+            $looksEmbeddedPhoto = preg_match('/^(data:|file:)/i', $photoUrl) === 1;
+            $looksRemotePhoto = preg_match('/^https?:/i', $photoUrl) === 1;
+
+            if ($looksEmbeddedPhoto) {
+                $resolvedStudentPhoto = $photoUrl;
+            } elseif ($looksRemotePhoto) {
+                $parsedPhotoPath = parse_url($photoUrl, PHP_URL_PATH);
+                $parsedPhotoPath = is_string($parsedPhotoPath) ? ltrim(str_replace('\\', '/', $parsedPhotoPath), '/') : '';
+                $localStoragePhotoPath = $parsedPhotoPath !== ''
+                    ? public_path(preg_replace('/^storage\//', 'storage/', $parsedPhotoPath))
+                    : null;
+
+                if ($localStoragePhotoPath && file_exists($localStoragePhotoPath)) {
+                    $resolvedStudentPhoto = $localStoragePhotoPath;
+                }
+            } else {
+                $publicPhotoPath = public_path($normalizedPhotoUrl);
+                $storagePhotoPath = public_path('storage/' . preg_replace('/^(public\/storage\/|storage\/)/', '', $normalizedPhotoUrl));
+
+                if (file_exists($publicPhotoPath)) {
+                    $resolvedStudentPhoto = $publicPhotoPath;
+                } elseif (file_exists($storagePhotoPath)) {
+                    $resolvedStudentPhoto = $storagePhotoPath;
+                }
+            }
+        }
+
         $phoneLine = trim((string) ($schoolPhone ?? ''));
         $sessionParts = array_filter([
             $card['exam_name'] ?? ($session['name'] ?? null),
@@ -98,18 +188,32 @@
             $card['section_name'] ?? null,
             $card['academic_year'] ?? ($session['academic_year'] ?? null),
         ]);
+        $hasQrCode = !empty($card['verification_qr_data_url']);
     @endphp
 
     <div class="watermark">
-        @if ($resolvedLogo)
-            <img src="{{ $resolvedLogo }}" alt="Watermark Logo" />
+        @if ($resolvedWatermarkLogo)
+            <img src="{{ $resolvedWatermarkLogo }}" alt="Watermark Logo" />
         @else
-            <span class="watermark-text">{{ $watermark }}</span>
+            <span class="watermark-text">{{ $watermarkText }}</span>
         @endif
     </div>
 
     <div class="ips-header">
-        <div class="ips-header-main">
+        <div class="ips-top-meta">
+            <div class="ips-top-meta-left">
+                @if (!empty($schoolUdise))
+                    <strong>UDISE:</strong> {{ $schoolUdise }}
+                @endif
+            </div>
+            <div class="ips-top-meta-right">
+                @if (!empty($schoolRegNo))
+                    <strong>Reg No:</strong> {{ $schoolRegNo }}
+                @endif
+            </div>
+        </div>
+
+        <div class="ips-header-main{{ $hasQrCode ? '' : ' ips-header-main--no-qr' }}">
             <div class="ips-left">
                 @if ($resolvedLogo)
                     <img src="{{ $resolvedLogo }}" alt="School Logo Left" class="ips-logo" />
@@ -121,12 +225,6 @@
                 @if (!empty($schoolAddress))
                     <div class="ips-address">{{ $schoolAddress }}</div>
                 @endif
-                @if (!empty($schoolUdise))
-                    <div class="ips-contact">UDISE: {{ $schoolUdise }}</div>
-                @endif
-                @if (!empty($schoolRegNo))
-                    <div class="ips-contact">Reg No: {{ $schoolRegNo }}</div>
-                @endif
                 @if ($phoneLine !== '')
                     <div class="ips-contact phone-line">Mob. {{ $phoneLine }}</div>
                 @endif
@@ -136,14 +234,14 @@
             </div>
 
             <div class="ips-right">
-                @if (!empty($card['verification_url']))
+                @if ($hasQrCode)
                     <img
-                        src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&margin=0&data={{ urlencode($card['verification_url']) }}"
+                        src="{{ $card['verification_qr_data_url'] }}"
                         alt="Verification QR"
                         class="ips-qr"
                     />
                 @else
-                    <div class="ips-qr-fallback">QR N/A</div>
+                    <div class="ips-qr-fallback"></div>
                 @endif
             </div>
         </div>
@@ -230,7 +328,11 @@
                 <div class="signature-label">Class Teacher Signature</div>
             </div>
             <div class="signature-box">
-                <div class="signature-line"></div>
+                @if (!empty($principalSignature))
+                    <img src="{{ $principalSignature }}" alt="Principal signature" class="signature-image" />
+                @else
+                    <div class="signature-line"></div>
+                @endif
                 <div class="signature-label">Principal Signature</div>
             </div>
         </div>

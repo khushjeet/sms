@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Cache;
 
 class ResultWidgetService
 {
+    private const HIDDEN_RESULT_MESSAGE = 'Result is not available for you currently. Please contact administration.';
+
     public function build(int $studentId, ?int $academicYearId): array
     {
         $cacheKey = implode(':', [
@@ -42,6 +44,8 @@ class ResultWidgetService
                     'state' => 'not_published',
                     'message' => 'Result not yet published.',
                     'latest_result' => null,
+                    'download_url' => null,
+                    'download_available' => false,
                 ];
             }
 
@@ -49,14 +53,18 @@ class ResultWidgetService
             if ($visibility !== 'visible') {
                 return [
                     'state' => 'blocked',
-                    'message' => 'Result temporarily unavailable. Contact administration.',
+                    'message' => self::HIDDEN_RESULT_MESSAGE,
                     'latest_result' => null,
+                    'download_url' => null,
+                    'download_available' => false,
                 ];
             }
 
             return [
                 'state' => 'available',
                 'message' => null,
+                'download_url' => route('results.paper', ['studentResultId' => (int) $result->id], false),
+                'download_available' => true,
                 'latest_result' => [
                     'student_result_id' => (int) $result->id,
                     'exam_name' => $result->examSession?->name,

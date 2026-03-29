@@ -15,7 +15,22 @@
       <option value="inactive">Inactive</option>
       <option value="dropped">Dropped</option>
     </select>
-    <button type="submit">Filter</button>
+    <select formControlName="class_id">
+      <option value="">All classes</option>
+      <option *ngFor="let classItem of classes()" [value]="classItem.id">
+        {{ classItem.name }}
+      </option>
+    </select>
+    <select formControlName="section_id">
+      <option value="">All sections</option>
+      <option *ngFor="let section of filteredSections()" [value]="section.id">
+        {{ section.class?.name || 'Class' }} - {{ section.name }}
+      </option>
+    </select>
+    <select formControlName="per_page">
+      <option *ngFor="let size of pageSizeOptions" [ngValue]="size">{{ size }}</option>
+    </select>
+    <button type="submit">Apply Filter</button>
   </form>
 
   <p class="error" *ngIf="error()">{{ error() }}</p>
@@ -25,6 +40,7 @@
       <span>Admission #</span>
       <span>Name</span>
       <span>Class</span>
+      <span>Section</span>
       <span>Status</span>
       <span>Actions</span>
     </div>
@@ -32,6 +48,7 @@
       <span>{{ student.admission_number }}</span>
       <span>{{ getStudentName(student) }}</span>
       <span>{{ getStudentClass(student) }}</span>
+      <span>{{ getStudentSection(student) }}</span>
       <span>{{ student.status }}</span>
       <span class="actions">
         <a [routerLink]="['/students', student.id]">View</a>
@@ -53,7 +70,7 @@
 
   <div class="pagination">
     <button type="button" (click)="previousPage()">Previous</button>
-    <span>Page {{ pagination().current_page }} of {{ pagination().last_page }}</span>
+    <span>Page {{ pagination().current_page }} of {{ pagination().last_page }} · {{ pagination().total }} students</span>
     <button type="button" (click)="nextPage()">Next</button>
   </div>
 </div>

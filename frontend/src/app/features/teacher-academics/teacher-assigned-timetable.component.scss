@@ -1,0 +1,66 @@
+.selection-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px 14px;
+  margin: 14px 0 16px;
+  padding: 12px 14px;
+  border: 1px solid #dbe4ef;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.selection-summary p {
+  margin: 0;
+}
+
+.selection-summary span {
+  color: #475569;
+}
+
+.teacher-timetable__controls {
+  margin: 14px 0;
+}
+
+.teacher-timetable__controls select {
+  min-width: 220px;
+}
+
+.matrix {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.matrix th,
+.matrix td {
+  border: 1px solid #dbe4ef;
+  padding: 10px;
+  vertical-align: top;
+}
+
+.matrix th {
+  background: #f8fbff;
+  text-align: left;
+}
+
+.slot-meta {
+  min-width: 150px;
+  background: #f8fafc;
+}
+
+.slot-meta strong,
+.cell strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.slot-meta span,
+.slot-meta small,
+.cell span {
+  display: block;
+  color: #475569;
+  line-height: 1.45;
+}
+
+.muted {
+  color: #94a3b8;
+}

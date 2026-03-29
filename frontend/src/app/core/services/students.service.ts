@@ -9,7 +9,14 @@ import { Student, StudentFinancialSummary } from '../../models/student';
 export class StudentsService {
   private readonly api = inject(ApiClient);
 
-  list(params?: { status?: string; class_id?: number; search?: string; per_page?: number; page?: number }) {
+  list(params?: {
+    status?: string;
+    class_id?: number;
+    section_id?: number;
+    search?: string;
+    per_page?: number;
+    page?: number;
+  }) {
     return this.api.get<PaginatedResponse<Student>>('students', params);
   }
 
@@ -19,6 +26,18 @@ export class StudentsService {
 
   getById(id: number) {
     return this.api.get<Student>(`students/${id}`);
+  }
+
+  downloadPdf(id: number) {
+    return this.api.getBlob(`students/${id}/pdf`);
+  }
+
+  avatar(id: number) {
+    return this.api.getBlob(`students/${id}/avatar`, { ts: Date.now() });
+  }
+
+  logo() {
+    return this.api.getBlob('students/logo');
   }
 
   update(id: number, payload: Record<string, unknown> | FormData) {

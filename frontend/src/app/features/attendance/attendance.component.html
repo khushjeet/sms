@@ -1,7 +1,7 @@
 <div class="attendance">
   <div class="attendance__header">
     <h2>Attendance</h2>
-    <p>Mark, review, and lock attendance by section and date.</p>
+    <p>Mark, review, and lock attendance by class, optional section, and date.</p>
   </div>
 
   <div class="card">
@@ -92,9 +92,15 @@
   <p class="success" *ngIf="message()">{{ message() }}</p>
 
   <form [formGroup]="form" class="form">
+    <select formControlName="class_id">
+      <option value="">Select class</option>
+      <option *ngFor="let classItem of classes()" [value]="classItem.id">
+        {{ classItem.name }}
+      </option>
+    </select>
     <select formControlName="section_id">
-      <option value="">Select section</option>
-      <option *ngFor="let section of sections()" [value]="section.id">
+      <option value="">All sections</option>
+      <option *ngFor="let section of filteredSections()" [value]="section.id">
         {{ section.class?.name }} - {{ section.name }}
       </option>
     </select>
@@ -134,12 +140,14 @@
     <div class="table__row table__row--head">
       <span>Roll #</span>
       <span>Student</span>
+      <span>Section</span>
       <span>Status</span>
       <span>Remarks</span>
     </div>
     <div class="table__row" *ngFor="let item of attendanceList()">
       <span>{{ item.roll_number || '-' }}</span>
       <span>{{ item.student_name }}</span>
+      <span>{{ item.section_name || 'No section' }}</span>
       <span>
         <select [ngModel]="item.status" (ngModelChange)="updateStatus(item, $event)">
           <option value="present">Present</option>
@@ -156,7 +164,7 @@
   </div>
 
   <div class="card" *ngIf="statistics() as stats">
-    <h3>Section Statistics</h3>
+    <h3>Attendance Statistics</h3>
     <pre>{{ stats | json }}</pre>
   </div>
 </div>

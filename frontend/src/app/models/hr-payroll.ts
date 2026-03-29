@@ -57,6 +57,45 @@ export interface PayrollBatchItemAdjustment {
   created_at: string;
 }
 
+export interface PayrollSnapshotAttendance {
+  present: number;
+  leave: number;
+  half_day: number;
+  absent: number;
+  unmarked: number;
+  days_in_month: number;
+  payable_days: number;
+  pay_ratio: number;
+}
+
+export interface PayrollSnapshotComponent {
+  name: string;
+  type: 'earning' | 'deduction' | string;
+  amount: number;
+  source_amount?: number | null;
+  source_percentage?: number | null;
+}
+
+export interface PayrollSnapshotComputed {
+  full_month_gross: number;
+  full_month_deductions: number;
+  pro_rated_gross: number;
+  pro_rated_deductions: number;
+  net: number;
+}
+
+export interface PayrollSnapshot {
+  staff_id: number;
+  employee_id?: string | null;
+  salary_structure_id?: number | null;
+  salary_template_id?: number | null;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  attendance?: PayrollSnapshotAttendance | null;
+  components?: PayrollSnapshotComponent[] | null;
+  computed?: PayrollSnapshotComputed | null;
+}
+
 export interface PayrollBatchItem {
   id: number;
   staff_id: number;
@@ -67,7 +106,7 @@ export interface PayrollBatchItem {
   gross_pay: string;
   total_deductions: string;
   net_pay: string;
-  snapshot: Record<string, unknown>;
+  snapshot: PayrollSnapshot;
   adjustments?: PayrollBatchItemAdjustment[];
 }
 

@@ -2,6 +2,7 @@ import { inject, Injectable, signal } from '@angular/core';
 import { tap } from 'rxjs/operators';
 import { ApiClient } from './api-client.service';
 import { AuthSession, AuthUser, LoginResponse } from '../../models/auth';
+import { environment } from '../../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
@@ -38,6 +39,19 @@ export class AuthService {
     return this.api.post<LoginResponse>('login', credentials).pipe(
       tap((response) => this.setSession(response))
     );
+  }
+
+  requestPasswordReset(email: string) {
+    return this.api.post<{ status: string }>('forgot-password', { email });
+  }
+
+  resetPassword(payload: {
+    token: string;
+    email: string;
+    password: string;
+    password_confirmation: string;
+  }) {
+    return this.api.post<{ status: string }>('reset-password', payload);
   }
 
   logout() {

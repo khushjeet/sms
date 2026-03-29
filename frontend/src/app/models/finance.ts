@@ -318,6 +318,8 @@ export interface DueReportResponse {
 
 export interface CollectionSummary {
   total_amount: number;
+  refunds?: number;
+  net_amount?: number;
   total_count: number;
   by_method: Record<string, number>;
 }
@@ -331,6 +333,7 @@ export interface RouteWiseReportItem {
   route_id: number | null;
   route_name: string | null;
   route_number: string | null;
+  enrollment_ids?: number[];
   student_count: number;
   fee_amount: number;
   total_amount: number;

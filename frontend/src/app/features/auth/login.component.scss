@@ -95,6 +95,32 @@
   border-radius: 8px;
 }
 
+.login__success {
+  color: #166534;
+  background: #dcfce7;
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.login__note {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  line-height: 1.5;
+}
+
+.login__link {
+  margin-top: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #1f3a33;
+  text-align: left;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 @media (max-width: 900px) {
   .login {
     grid-template-columns: 1fr;

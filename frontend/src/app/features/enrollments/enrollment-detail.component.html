@@ -18,7 +18,10 @@
     <div class="detail__grid">
       <div class="card">
         <h3>Enrollment Details</h3>
-        <p><strong>Academic Year:</strong> {{ e.academicYear?.name }}</p>
+        <p class="detail-line">
+          <strong>Academic Year:</strong>
+          <span>{{ e.academicYear?.name }}</span>
+        </p>
         <p><strong>Current Class / Section:</strong> {{ getCurrentClassSection(e) }}</p>
         <p *ngIf="getPromotedFromClassSection(e) !== '-'">
           <strong>Promoted From:</strong> {{ getPromotedFromClassSection(e) }}

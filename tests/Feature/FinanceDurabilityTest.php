@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\NotifyPaymentRecordedJob;
 use App\Models\AcademicYear;
 use App\Models\ClassModel;
 use App\Models\Enrollment;
@@ -12,6 +13,7 @@ use App\Models\User;
 use Database\Seeders\AccountingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -23,6 +25,7 @@ class FinanceDurabilityTest extends TestCase
     {
         [$admin, $enrollment] = $this->bootstrapFinanceContext();
         Sanctum::actingAs($admin);
+        Queue::fake();
 
         $response = $this->postJson('/api/v1/finance/payments', [
             'enrollment_id' => $enrollment->id,
@@ -57,6 +60,11 @@ class FinanceDurabilityTest extends TestCase
             number_format((float) $lineTotals->debits, 2, '.', ''),
             number_format((float) $lineTotals->credits, 2, '.', '')
         );
+
+        Queue::assertPushed(NotifyPaymentRecordedJob::class, function (NotifyPaymentRecordedJob $job) use ($paymentId) {
+            return $job->paymentId === $paymentId
+                && $job->queue === 'emails';
+        });
     }
 
     public function test_refund_is_idempotent_and_duplicate_refund_is_blocked(): void

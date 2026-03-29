@@ -1,0 +1,62 @@
+<div class="teacher-timetable">
+  <div class="teacher-timetable__header">
+    <div>
+      <h2>Assigned Timetable</h2>
+      <p>View the class periods currently assigned to you in a clear weekly grid.</p>
+    </div>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <div class="teacher-timetable__controls" *ngIf="vm() as data">
+    <select [ngModel]="academicYearId()" (ngModelChange)="academicYearId.set($event); load()">
+      <option value="">Select academic year</option>
+      <option *ngFor="let year of data.academic_year_options" [value]="year.id">
+        {{ year.name }}{{ year.is_current ? ' (Current)' : '' }}
+      </option>
+    </select>
+  </div>
+
+  <div class="selection-summary" *ngIf="selectedMeta() as meta">
+    <p><span>Teacher:</span> <strong>{{ meta.teacher_name || '-' }}</strong></p>
+    <p><span>Academic Year:</span> <strong>{{ meta.academic_year_name || '-' }}</strong></p>
+  </div>
+
+  <p *ngIf="loading()">Loading timetable...</p>
+
+  <div class="matrix-wrap" *ngIf="!loading() && vm() as data">
+    <table class="matrix" *ngIf="data.matrix.length > 0; else emptyState">
+      <thead>
+        <tr>
+          <th>Time Slot</th>
+          <th *ngFor="let day of data.days">{{ day.label }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let row of data.matrix">
+          <td class="slot-meta">
+            <strong>{{ row.slot.name }}</strong>
+            <span>{{ row.slot.time_range }}</span>
+            <small *ngIf="row.slot.is_break">Break</small>
+          </td>
+          <td *ngFor="let day of data.days">
+            <ng-container *ngIf="row.days[day.value] as cell; else emptyCell">
+              <div class="cell">
+                <strong>{{ cell.subject_name || (cell.is_break ? 'Break' : '-') }}</strong>
+                <span>{{ cell.class_name || '-' }} / {{ cell.section_name || '-' }}</span>
+                <span *ngIf="cell.room_number">Room: {{ cell.room_number }}</span>
+              </div>
+            </ng-container>
+            <ng-template #emptyCell>
+              <span class="muted">-</span>
+            </ng-template>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <ng-template #emptyState>
+    <p>No timetable rows are assigned to your account for the selected academic year.</p>
+  </ng-template>
+</div>

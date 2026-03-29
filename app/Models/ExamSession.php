@@ -16,6 +16,11 @@ class ExamSession extends Model
         'class_id',
         'exam_configuration_id',
         'name',
+        'class_name_snapshot',
+        'exam_name_snapshot',
+        'academic_year_label_snapshot',
+        'school_snapshot',
+        'identity_locked_at',
         'status',
         'published_at',
         'locked_at',
@@ -23,6 +28,8 @@ class ExamSession extends Model
     ];
 
     protected $casts = [
+        'school_snapshot' => 'array',
+        'identity_locked_at' => 'datetime',
         'published_at' => 'datetime',
         'locked_at' => 'datetime',
     ];

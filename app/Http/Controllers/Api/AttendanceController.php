@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\AcademicYear;
 use App\Models\Attendance;
 use App\Models\Enrollment;
+use App\Models\Section;
 use App\Models\Student;
+use App\Services\InAppNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -22,22 +24,29 @@ class AttendanceController extends Controller
     public function markAttendance(Request $request)
     {
         $validated = $request->validate([
-            'section_id' => 'required|exists:sections,id',
+            'class_id' => 'nullable|exists:classes,id',
+            'section_id' => 'nullable|exists:sections,id',
             'date' => 'required|date',
             'attendances' => 'required|array',
             'attendances.*.enrollment_id' => 'required|exists:enrollments,id',
             'attendances.*.status' => 'required|in:present,absent,leave,half_day',
             'attendances.*.remarks' => 'nullable|string',
         ]);
-        $this->ensureTeacherSectionAccess($request, (int) $validated['section_id']);
+        $scope = $this->resolveAttendanceScope($request, $validated);
+        $allowedEnrollmentIds = $this->attendanceEnrollmentQuery($scope)->pluck('id')->all();
 
         try {
             DB::beginTransaction();
 
             $markedBy = Auth::id();
             $markedAt = now();
+            $processedCount = 0;
 
             foreach ($validated['attendances'] as $attendanceData) {
+                if (!in_array((int) $attendanceData['enrollment_id'], $allowedEnrollmentIds, true)) {
+                    continue;
+                }
+
                 $enrollment = Enrollment::find($attendanceData['enrollment_id']);
 
                 // Check if enrollment can receive attendance
@@ -61,6 +70,7 @@ class AttendanceController extends Controller
                         'marked_by' => $markedBy,
                         'marked_at' => $markedAt,
                     ]);
+                    $processedCount++;
                 } else {
                     // Create new
                     Attendance::create([
@@ -72,10 +82,21 @@ class AttendanceController extends Controller
                         'marked_at' => $markedAt,
                         'is_locked' => false,
                     ]);
+                    $processedCount++;
                 }
             }
 
             DB::commit();
+
+            $actor = $request->user();
+            if ($actor && $processedCount > 0) {
+                app(InAppNotificationService::class)->notifyStudentAttendanceMarked(
+                    $actor,
+                    $scope,
+                    (string) $validated['date'],
+                    $processedCount
+                );
+            }
 
             return response()->json([
                 'message' => 'Attendance marked successfully'
@@ -96,12 +117,13 @@ class AttendanceController extends Controller
     public function getSectionAttendance(Request $request)
     {
         $validated = $request->validate([
-            'section_id' => 'required|exists:sections,id',
+            'class_id' => 'nullable|exists:classes,id',
+            'section_id' => 'nullable|exists:sections,id',
             'date' => 'required|date',
         ]);
-        $this->ensureTeacherSectionAccess($request, (int) $validated['section_id']);
+        $scope = $this->resolveAttendanceScope($request, $validated);
 
-        $enrollments = Enrollment::where('section_id', $validated['section_id'])
+        $enrollments = $this->attendanceEnrollmentQuery($scope)
             ->where('status', 'active')
             ->with(['student.user', 'attendances' => function ($q) use ($validated) {
                 $q->where('date', $validated['date']);
@@ -115,6 +137,8 @@ class AttendanceController extends Controller
                 'enrollment_id' => $enrollment->id,
                 'roll_number' => $enrollment->roll_number,
                 'student_name' => $enrollment->student->full_name,
+                'class_name' => $enrollment->classModel?->name,
+                'section_name' => $enrollment->section?->name,
                 'status' => $attendance?->status ?? 'not_marked',
                 'remarks' => $attendance?->remarks,
                 'marked_by' => $attendance?->markedBy ?? null,
@@ -172,12 +196,14 @@ class AttendanceController extends Controller
     public function getSectionStatistics(Request $request)
     {
         $validated = $request->validate([
-            'section_id' => 'required|exists:sections,id',
+            'class_id' => 'nullable|exists:classes,id',
+            'section_id' => 'nullable|exists:sections,id',
             'start_date' => 'required|date',
             'end_date' => 'required|date',
         ]);
+        $scope = $this->resolveAttendanceScope($request, $validated);
 
-        $enrollments = Enrollment::where('section_id', $validated['section_id'])
+        $enrollments = $this->attendanceEnrollmentQuery($scope)
             ->where('status', 'active')
             ->with(['student.user', 'attendances' => function ($q) use ($validated) {
                 $q->whereBetween('date', [$validated['start_date'], $validated['end_date']]);
@@ -769,17 +795,20 @@ class AttendanceController extends Controller
     public function lockAttendance(Request $request)
     {
         $validated = $request->validate([
-            'section_id' => 'required|exists:sections,id',
+            'class_id' => 'nullable|exists:classes,id',
+            'section_id' => 'nullable|exists:sections,id',
             'date' => 'required|date',
         ]);
-        $this->ensureTeacherSectionAccess($request, (int) $validated['section_id']);
+        $scope = $this->resolveAttendanceScope($request, $validated);
 
-        $enrollments = Enrollment::where('section_id', $validated['section_id'])
+        $enrollments = $this->attendanceEnrollmentQuery($scope)
             ->pluck('id');
 
         Attendance::whereIn('enrollment_id', $enrollments)
             ->where('date', $validated['date'])
             ->update(['is_locked' => true]);
+
+        app(InAppNotificationService::class)->notifyAttendanceLocked($scope, (string) $validated['date']);
 
         return response()->json([
             'message' => 'Attendance locked successfully'
@@ -920,11 +949,51 @@ class AttendanceController extends Controller
         return null;
     }
 
-    private function ensureTeacherSectionAccess(Request $request, int $sectionId): void
+    private function resolveAttendanceScope(Request $request, array $validated): array
+    {
+        $classId = !empty($validated['class_id']) ? (int) $validated['class_id'] : null;
+        $sectionId = !empty($validated['section_id']) ? (int) $validated['section_id'] : null;
+
+        if (!$classId && !$sectionId) {
+            abort(422, 'Select at least a class.');
+        }
+
+        if ($sectionId) {
+            $section = Section::query()->findOrFail($sectionId);
+            if ($classId && (int) $section->class_id !== $classId) {
+                abort(422, 'Selected section does not belong to the selected class.');
+            }
+            $classId ??= (int) $section->class_id;
+        }
+
+        $this->ensureTeacherAttendanceAccess($request, $sectionId);
+
+        return [
+            'class_id' => $classId,
+            'section_id' => $sectionId,
+        ];
+    }
+
+    private function attendanceEnrollmentQuery(array $scope)
+    {
+        $query = Enrollment::query()->where('class_id', (int) $scope['class_id']);
+
+        if (!empty($scope['section_id'])) {
+            $query->where('section_id', (int) $scope['section_id']);
+        }
+
+        return $query;
+    }
+
+    private function ensureTeacherAttendanceAccess(Request $request, ?int $sectionId): void
     {
         $user = $request->user();
         if (!$user || !$user->hasRole('teacher')) {
             return;
+        }
+
+        if (!$sectionId) {
+            abort(403, 'Teachers must select a section for attendance.');
         }
 
         $isAssigned = DB::table('teacher_subject_assignments')

@@ -11,9 +11,13 @@ use App\Models\AdmitVisibilityControl;
 use App\Models\AcademicYearExamConfig;
 use App\Models\Enrollment;
 use App\Models\ExamSession;
+use App\Models\SchoolSetting;
 use App\Models\Student;
+use App\Services\Email\EventNotificationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -399,6 +403,8 @@ class AdmitCardController extends Controller
             'created_at' => $now,
         ]);
 
+        app(EventNotificationService::class)->notifyAdmitPublishedByIds($eligibleIds);
+
         return response()->json([
             'message' => 'Admit cards published successfully.',
             'exam_session_id' => (int) $session->id,
@@ -536,7 +542,7 @@ class AdmitCardController extends Controller
                 'exam_name' => $admit->examSession?->name,
                 'version' => (int) $admit->version,
                 'published_at' => $admit->published_at?->toDateTimeString(),
-                'download_url' => route('admit.cards.paper', ['admitCardId' => (int) $admit->id], false),
+                'download_url' => route('admit.cards.paper.download', ['admitCardId' => (int) $admit->id], false),
             ],
         ]);
     }
@@ -576,15 +582,7 @@ class AdmitCardController extends Controller
         }
 
         $payload = [
-            'school' => [
-                'name' => config('school.name'),
-                'logo_url' => config('school.logo_url'),
-                'address' => config('school.address'),
-                'phone' => config('school.phone'),
-                'website' => config('school.website'),
-                'reg_no' => config('school.reg_no'),
-                'udise' => config('school.udise'),
-            ],
+            'school' => $this->schoolPayload(),
             'session' => [
                 'id' => (int) $session->id,
                 'name' => $session->name,
@@ -597,7 +595,6 @@ class AdmitCardController extends Controller
         ];
 
         $pdf = Pdf::loadView('admits.bulk-admit-cards', $payload)->setPaper('a4', 'portrait');
-        $pdf->setOption(['isRemoteEnabled' => true]);
         Storage::disk('local')->makeDirectory('admits');
 
         $filename = 'admit-session-' . $session->id . '.pdf';
@@ -649,22 +646,17 @@ class AdmitCardController extends Controller
         }
 
         return response()->json([
-            'school' => [
-                'name' => config('school.name'),
-                'logo_url' => config('school.logo_url'),
-                'address' => config('school.address'),
-                'phone' => config('school.phone'),
-                'website' => config('school.website'),
-                'reg_no' => config('school.reg_no'),
-                'udise' => config('school.udise'),
-            ],
+            'school' => $this->schoolPayload(),
             'admit_card' => $this->buildAdmitPaperPayload($admit),
         ]);
     }
 
     public function paperPdf(Request $request, int $admitCardId)
     {
-        $this->requireSuperAdmin($request);
+        $user = $request->user();
+        if (!$user) {
+            abort(403, 'Authentication required.');
+        }
 
         $admit = AdmitCard::query()
             ->with([
@@ -683,16 +675,23 @@ class AdmitCardController extends Controller
             ->where('is_superseded', false)
             ->findOrFail($admitCardId);
 
+        $isSuperAdmin = $user->hasRole('super_admin');
+        $isOwnerStudent = $user->hasRole('student') && $admit->student?->user_id === $user->id;
+        if (!$isSuperAdmin && !$isOwnerStudent) {
+            abort(403, 'Only super admin or owner student can download admit card.');
+        }
+
+        $visibility = $admit->latestVisibility?->visibility_status ?? 'visible';
+        if (!$isSuperAdmin && $visibility !== 'visible') {
+            abort(403, self::HIDDEN_ADMIT_MESSAGE);
+        }
+
+        if (!$isSuperAdmin && $admit->status !== 'published') {
+            abort(403, 'Admit card is not published yet.');
+        }
+
         $payload = [
-            'school' => [
-                'name' => config('school.name'),
-                'logo_url' => config('school.logo_url'),
-                'address' => config('school.address'),
-                'phone' => config('school.phone'),
-                'website' => config('school.website'),
-                'reg_no' => config('school.reg_no'),
-                'udise' => config('school.udise'),
-            ],
+            'school' => $this->schoolPayload(),
             'session' => [
                 'name' => $admit->examSession?->name,
                 'class_name' => $admit->examSession?->classModel?->name,
@@ -701,17 +700,145 @@ class AdmitCardController extends Controller
             'card' => $this->buildAdmitPaperPayload($admit),
         ];
 
-        $pdf = Pdf::loadView('admits.single-admit-card', $payload)->setPaper('a4', 'portrait');
-        $pdf->setOption(['isRemoteEnabled' => true]);
         Storage::disk('local')->makeDirectory('admits');
 
-        $filename = 'admit-' . $admit->id . '.pdf';
+        $payloadSignature = substr(md5(json_encode([
+            'template_version' => 'single-admit-v2',
+            'school' => $payload['school'],
+            'card_id' => $admit->id,
+            'version' => $admit->version,
+            'published_at' => $admit->published_at?->toDateTimeString(),
+            'generated_at' => $admit->generated_at?->toDateTimeString(),
+        ])), 0, 12);
+
+        $filename = 'admit-' . $admit->id . '-v' . $admit->version . '-' . $payloadSignature . '.pdf';
         $path = 'admits/' . $filename;
-        Storage::disk('local')->put($path, $pdf->output());
+
+        if (!Storage::disk('local')->exists($path)) {
+            $pdf = Pdf::loadView('admits.single-admit-card', $payload)->setPaper('a4', 'portrait');
+            Storage::disk('local')->put($path, $pdf->output());
+        }
 
         return Storage::disk('local')->download($path, $filename, [
             'Content-Type' => 'application/pdf',
         ]);
+    }
+
+    private function schoolPayload(): array
+    {
+        $settings = SchoolSetting::getValues([
+            'school_name',
+            'school_logo_url',
+            'school_address',
+            'school_phone',
+            'school_website',
+            'school_registration_number',
+            'school_udise_code',
+            'school_watermark_text',
+            'school_watermark_logo_url',
+            'principal_signature_path',
+        ]);
+        $schoolName = $settings['school_name'] ?? config('school.name');
+        $logoValue = $settings['school_logo_url'] ?? config('school.logo_url');
+        $watermarkLogoValue = $settings['school_watermark_logo_url'] ?? null;
+
+        return [
+            'name' => $schoolName,
+            'logo_url' => $this->normalizeSchoolAssetUrl($logoValue),
+            'logo_data_url' => $this->buildSchoolImageDataUrl($logoValue),
+            'address' => $settings['school_address'] ?? config('school.address'),
+            'phone' => $settings['school_phone'] ?? config('school.phone'),
+            'website' => $settings['school_website'] ?? config('school.website'),
+            'reg_no' => $settings['school_registration_number'] ?? config('school.reg_no'),
+            'udise' => $settings['school_udise_code'] ?? config('school.udise'),
+            'watermark_text' => $settings['school_watermark_text'] ?? $schoolName,
+            'watermark_logo_url' => $this->normalizeSchoolAssetUrl($watermarkLogoValue),
+            'watermark_logo_data_url' => $this->buildSchoolImageDataUrl($watermarkLogoValue ?: $logoValue),
+            'principal_signature' => $this->normalizeSchoolAssetUrl($settings['principal_signature_path'] ?? null),
+            'principal_signature_data_url' => $this->buildSchoolImageDataUrl($settings['principal_signature_path'] ?? null),
+        ];
+    }
+
+    private function normalizeSchoolAssetUrl(?string $value): ?string
+    {
+        $normalized = trim((string) $value);
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        if (preg_match('/^https?:|^data:/i', $normalized) === 1) {
+            return $normalized;
+        }
+
+        $normalized = str_replace('\\', '/', $normalized);
+        $normalized = preg_replace('/^public\/storage\//', '', $normalized);
+        $normalized = preg_replace('/^storage\//', '', $normalized);
+        $normalized = is_string($normalized) ? ltrim($normalized, '/') : '';
+
+        return $normalized !== '' ? url('storage/' . $normalized) : null;
+    }
+
+    private function buildSchoolImageDataUrl(?string $value): ?string
+    {
+        $path = $this->resolveLocalSchoolImagePath($value);
+        if ($path === null || !is_file($path) || !is_readable($path)) {
+            return null;
+        }
+
+        $mime = mime_content_type($path) ?: null;
+        if ($mime === null || !str_starts_with($mime, 'image/')) {
+            return null;
+        }
+
+        $contents = @file_get_contents($path);
+        if ($contents === false) {
+            return null;
+        }
+
+        return 'data:' . $mime . ';base64,' . base64_encode($contents);
+    }
+
+    private function resolveLocalSchoolImagePath(?string $value): ?string
+    {
+        $normalized = trim((string) $value);
+        if ($normalized === '') {
+            return null;
+        }
+
+        if (preg_match('/^data:/i', $normalized) === 1) {
+            return null;
+        }
+
+        if (preg_match('/^https?:/i', $normalized) === 1) {
+            $parsed = parse_url($normalized);
+            $host = strtolower((string) ($parsed['host'] ?? ''));
+            $path = (string) ($parsed['path'] ?? '');
+            if (!in_array($host, ['127.0.0.1', 'localhost'], true) || $path === '') {
+                return null;
+            }
+            $normalized = ltrim($path, '/');
+        }
+
+        $normalized = str_replace('\\', '/', $normalized);
+        $normalized = is_string($normalized) ? ltrim($normalized, '/') : '';
+        $relativePath = preg_replace('/^(public\/storage\/|storage\/|public\/)/', '', $normalized);
+        $relativePath = is_string($relativePath) ? ltrim($relativePath, '/') : $normalized;
+
+        $candidates = [
+            file_exists($normalized) ? $normalized : null,
+            public_path($normalized),
+            public_path('storage/' . $relativePath),
+            storage_path('app/public/' . $relativePath),
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_string($candidate) && $candidate !== '' && file_exists($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     public function verifyPublic(Request $request)
@@ -923,12 +1050,7 @@ class AdmitCardController extends Controller
             $admit->student?->pincode,
         ])));
 
-        $verificationUuid = (string) $admit->verification_uuid;
-        $verificationSignature = strtolower(substr((string) $admit->verification_hash, 0, 16));
-        $verificationBase = url('/api/v1/public/admits/verify');
-        $verificationUrl = $verificationUuid !== '' && $verificationSignature !== ''
-            ? ($verificationBase . '?v=' . urlencode($verificationUuid) . '&sig=' . urlencode($verificationSignature))
-            : null;
+        $verificationUrl = $this->schoolHomeUrl();
 
         return [
             'id' => (int) $admit->id,
@@ -938,7 +1060,13 @@ class AdmitCardController extends Controller
             'mother_name' => $motherName,
             'dob' => $dob,
             'address' => $fullAddress,
-            'photo_url' => $admit->student?->avatar_url ?: $studentProfile?->avatar_url ?: $admit->student?->user?->avatar,
+            'photo_url' => $this->resolveStudentPhotoUrl([
+                $studentProfile?->avatar_url,
+                $admit->student?->user?->avatar_url,
+                $admit->student?->user?->avatar,
+                $admit->student?->avatar_url,
+                $this->lookupAvatarTablePhotoUrl($admit->student),
+            ]),
             'enrollment_number' => $admit->enrollment?->roll_number,
             'registration_number' => $admit->student?->admission_number,
             'class_name' => $admit->examSession?->classModel?->name,
@@ -952,8 +1080,221 @@ class AdmitCardController extends Controller
             'version' => (int) $admit->version,
             'published_at' => $admit->published_at?->toDateTimeString(),
             'verification_url' => $verificationUrl,
+            'verification_qr_data_url' => $this->buildVerificationQrDataUrl($verificationUrl),
             'schedule_snapshot_version' => (int) ($admit->scheduleSnapshot?->snapshot_version ?? 1),
             'schedule' => $admit->scheduleSnapshot?->schedule_snapshot['subjects'] ?? [],
         ];
     }
+
+    private function buildVerificationQrDataUrl(?string $verificationUrl): ?string
+    {
+        $verificationUrl = trim((string) $verificationUrl);
+        if ($verificationUrl === '') {
+            return null;
+        }
+
+        if (!class_exists(\SimpleSoftwareIO\QrCode\Facades\QrCode::class)) {
+            return null;
+        }
+
+        try {
+            $svg = \SimpleSoftwareIO\QrCode\Facades\QrCode::size(100)
+                ->margin(0)
+                ->generate($verificationUrl);
+
+            return 'data:image/svg+xml;base64,' . base64_encode($svg);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function schoolHomeUrl(): string
+    {
+        $website = trim((string) SchoolSetting::getValue('school_website', config('school.website', '')));
+
+        if ($website !== '') {
+            if (preg_match('/^https?:\/\//i', $website) === 1) {
+                return $website;
+            }
+
+            return 'https://' . ltrim($website, '/');
+        }
+
+        return url('/');
+    }
+
+    private function resolveStudentPhotoUrl(array $candidates): ?string
+    {
+        foreach ($candidates as $candidate) {
+            $resolved = $this->normalizeStudentPhotoCandidate($candidate);
+            if ($resolved !== null) {
+                return $resolved;
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeStudentPhotoCandidate(mixed $path): ?string
+    {
+        $normalized = trim((string) $path);
+        if ($normalized === '') {
+            return null;
+        }
+
+        if (preg_match('/^data:|^file:/i', $normalized) === 1) {
+            return $normalized;
+        }
+
+        if (preg_match('/^https?:/i', $normalized) === 1) {
+            $parsedPath = parse_url($normalized, PHP_URL_PATH);
+            $localPath = $this->resolveLocalStudentPhotoPath(is_string($parsedPath) ? $parsedPath : null);
+
+            return $localPath ? ($this->toEmbeddedImageSource($localPath) ?? $normalized) : $normalized;
+        }
+
+        $localPath = $this->resolveLocalStudentPhotoPath($normalized);
+        if ($localPath !== null) {
+            return $this->toEmbeddedImageSource($localPath) ?? $localPath;
+        }
+
+        return url('storage/' . ltrim(str_replace('\\', '/', $normalized), '/'));
+    }
+
+    private function resolveLocalStudentPhotoPath(?string $path): ?string
+    {
+        $normalized = trim((string) $path);
+        if ($normalized === '') {
+            return null;
+        }
+
+        $normalized = ltrim(str_replace('\\', '/', $normalized), '/');
+        $relativePath = preg_replace('/^(public\/storage\/|storage\/|public\/)/', '', $normalized);
+        $relativePath = is_string($relativePath) ? ltrim($relativePath, '/') : $normalized;
+
+        $candidates = [
+            file_exists($normalized) ? $normalized : null,
+            public_path($normalized),
+            public_path('storage/' . $relativePath),
+            storage_path('app/public/' . $relativePath),
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_string($candidate) && $candidate !== '' && file_exists($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private function toEmbeddedImageSource(?string $path): ?string
+    {
+        $normalized = trim((string) $path);
+        if ($normalized === '' || !file_exists($normalized) || !is_readable($normalized)) {
+            return null;
+        }
+
+        $contents = @file_get_contents($normalized);
+        if ($contents === false || $contents === '') {
+            return null;
+        }
+
+        $mimeType = @mime_content_type($normalized) ?: null;
+        if (!is_string($mimeType) || !str_starts_with($mimeType, 'image/')) {
+            $extension = strtolower(pathinfo($normalized, PATHINFO_EXTENSION));
+            $mimeType = match ($extension) {
+                'jpg', 'jpeg' => 'image/jpeg',
+                'png' => 'image/png',
+                'gif' => 'image/gif',
+                'webp' => 'image/webp',
+                'svg' => 'image/svg+xml',
+                default => null,
+            };
+        }
+
+        if (!is_string($mimeType) || $mimeType === '') {
+            return null;
+        }
+
+        return 'data:' . $mimeType . ';base64,' . base64_encode($contents);
+    }
+
+    private function lookupAvatarTablePhotoUrl(?Student $student): ?string
+    {
+        if (!$student) {
+            return null;
+        }
+
+        $columns = Cache::rememberForever('avatars.table.columns', function () {
+            try {
+                if (!Schema::hasTable('avatars')) {
+                    return [];
+                }
+
+                return Schema::getColumnListing('avatars');
+            } catch (\Throwable) {
+                return [];
+            }
+        });
+
+        if (empty($columns)) {
+            return null;
+        }
+
+        $imageColumn = collect(['image_url', 'avatar_url', 'url', 'path', 'image', 'src'])
+            ->first(fn (string $column): bool => in_array($column, $columns, true));
+
+        if (!is_string($imageColumn) || $imageColumn === '') {
+            return null;
+        }
+
+        $orderColumn = in_array('id', $columns, true)
+            ? 'id'
+            : (in_array('created_at', $columns, true) ? 'created_at' : null);
+
+        $queries = [];
+
+        if ($student->user_id && in_array('user_id', $columns, true)) {
+            $queries[] = DB::table('avatars')->where('user_id', $student->user_id);
+        }
+
+        if ($student->id && in_array('student_id', $columns, true)) {
+            $queries[] = DB::table('avatars')->where('student_id', $student->id);
+        }
+
+        if ($student->user_id && in_array('avatarable_type', $columns, true) && in_array('avatarable_id', $columns, true)) {
+            foreach (['App\\Models\\User', 'user'] as $type) {
+                $queries[] = DB::table('avatars')
+                    ->where('avatarable_type', $type)
+                    ->where('avatarable_id', $student->user_id);
+            }
+        }
+
+        if ($student->id && in_array('avatarable_type', $columns, true) && in_array('avatarable_id', $columns, true)) {
+            foreach ([Student::class, 'student'] as $type) {
+                $queries[] = DB::table('avatars')
+                    ->where('avatarable_type', $type)
+                    ->where('avatarable_id', $student->id);
+            }
+        }
+
+        foreach ($queries as $query) {
+            try {
+                if ($orderColumn) {
+                    $query->orderByDesc($orderColumn);
+                }
+
+                $value = $query->value($imageColumn);
+                if (is_string($value) && trim($value) !== '') {
+                    return $value;
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        return null;
+    }
+
 }

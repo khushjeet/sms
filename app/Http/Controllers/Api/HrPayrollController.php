@@ -16,6 +16,7 @@ use App\Models\StaffAttendancePunchEvent;
 use App\Models\StaffAttendanceRecord;
 use App\Models\StaffAttendanceSession;
 use App\Models\StaffSalaryStructure;
+use App\Services\InAppNotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -78,6 +79,7 @@ class HrPayrollController extends Controller
         }
 
         $attendanceDate = Carbon::parse($validated['date']);
+        $attendanceDateString = $attendanceDate->toDateString();
         $monthLock = StaffAttendanceMonthLock::query()
             ->where('year', (int) $attendanceDate->year)
             ->where('month', (int) $attendanceDate->month)
@@ -99,11 +101,11 @@ class HrPayrollController extends Controller
             }
         }
 
-        $record = DB::transaction(function () use ($request, $validated, $override, $staffId) {
+        $record = DB::transaction(function () use ($request, $validated, $override, $staffId, $attendanceDateString) {
             /** @var StaffAttendanceRecord|null $existing */
             $existing = StaffAttendanceRecord::query()
                 ->where('staff_id', $staffId)
-                ->whereDate('attendance_date', $validated['date'])
+                ->whereDate('attendance_date', $attendanceDateString)
                 ->first();
 
             $oldValues = $existing?->toArray();
@@ -111,7 +113,7 @@ class HrPayrollController extends Controller
             $record = StaffAttendanceRecord::updateOrCreate(
                 [
                     'staff_id' => $staffId,
-                    'attendance_date' => $validated['date'],
+                    'attendance_date' => $attendanceDateString,
                 ],
                 [
                     'status' => $validated['status'],
@@ -342,6 +344,8 @@ class HrPayrollController extends Controller
             'updated_at' => now(),
         ]);
 
+        app(InAppNotificationService::class)->notifyLeaveSubmitted($leaveId);
+
         return response()->json([
             'message' => 'Leave request submitted.',
             'data' => DB::table('staff_leaves')->where('id', $leaveId)->first(),
@@ -395,6 +399,8 @@ class HrPayrollController extends Controller
                 'created_by' => $request->user()?->id,
             ]);
         });
+
+        app(InAppNotificationService::class)->notifyLeaveDecision($leaveId);
 
         return response()->json([
             'message' => 'Leave request updated.',
@@ -651,7 +657,8 @@ class HrPayrollController extends Controller
 
                 $attendance = StaffAttendanceRecord::query()
                     ->where('staff_id', $staff->id)
-                    ->whereBetween('attendance_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
+                    ->whereDate('attendance_date', '>=', $periodStart->toDateString())
+                    ->whereDate('attendance_date', '<=', $periodEnd->toDateString())
                     ->get();
 
                 $daysInMonth = (int) $periodStart->daysInMonth;

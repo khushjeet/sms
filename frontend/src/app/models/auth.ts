@@ -6,6 +6,7 @@ export interface AuthUser {
   last_name: string;
   phone?: string | null;
   avatar?: string | null;
+  avatar_url?: string | null;
   full_name?: string;
   status: 'active' | 'inactive' | 'suspended' | string;
 }

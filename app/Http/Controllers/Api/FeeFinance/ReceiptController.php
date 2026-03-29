@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\FeeFinance;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\NotifyPaymentRecordedJob;
 use App\Models\AuditLog;
 use App\Models\Enrollment;
 use App\Models\Payment;
@@ -73,6 +74,10 @@ class ReceiptController extends Controller
 
             AuditLog::log('create', $payment, null, $payment->toArray(), 'Payment recorded via legacy receipts endpoint');
             AuditLog::log('create', $ledger, null, $ledger->toArray(), 'Ledger credit (projection) created from payment');
+
+            DB::afterCommit(function () use ($payment) {
+                NotifyPaymentRecordedJob::dispatch((int) $payment->id);
+            });
 
             return response()->json([
                 'message' => 'Recorded via payments flow (receipts endpoint is compatibility mode).',

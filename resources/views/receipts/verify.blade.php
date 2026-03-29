@@ -10,7 +10,7 @@
     .badge { display:inline-block; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
     .ok { background: #dcfce7; color: #166534; }
     .bad { background: #fee2e2; color: #991b1b; }
-    .muted { color: #475569; font-size: 13px; }
+    .muted { color: #CACFD6; font-size: 13px; }
     .kvs { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
     .kvs div { background:#f8fafc; border:1px solid #e2e8f0; padding: 10px 12px; border-radius: 12px; }
   </style>

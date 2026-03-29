@@ -38,6 +38,16 @@ use App\Http\Controllers\Api\AdminMarksController;
 use App\Http\Controllers\Api\PublicResultVerificationController;
 use App\Http\Controllers\Api\ResultPublishingController;
 use App\Http\Controllers\Api\AdmitCardController;
+use App\Http\Controllers\Api\SchoolSignatureController;
+use App\Http\Controllers\Api\SchoolDetailsController;
+use App\Http\Controllers\Api\SchoolCredentialController;
+use App\Http\Controllers\Api\MessageCenterController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\TimetableController;
+use App\Http\Controllers\Api\AuditDownloadController;
+use App\Http\Controllers\Api\SchoolEventController;
+use App\Http\Controllers\Auth\NewPasswordController;
+use App\Http\Controllers\Auth\PasswordResetLinkController;
 
 /*
 |--------------------------------------------------------------------------
@@ -53,6 +63,8 @@ Route::prefix('v1')->group(function () {
 
     // Auth routes (public - no authentication required)
     Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/forgot-password', [PasswordResetLinkController::class, 'store']);
+    Route::post('/reset-password', [NewPasswordController::class, 'store']);
 
     // Protected auth routes
     Route::middleware(['auth:sanctum'])->group(function () {
@@ -65,6 +77,14 @@ Route::prefix('v1')->group(function () {
 
         // User profile
         Route::get('/user', [AuthController::class, 'user']);
+
+        Route::prefix('notifications')->group(function () {
+            Route::get('/', [NotificationController::class, 'index']);
+            Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
+            Route::get('/recent', [NotificationController::class, 'recent']);
+            Route::post('/mark-all-read', [NotificationController::class, 'markAllRead']);
+            Route::post('/{id}/read', [NotificationController::class, 'markRead']);
+        });
 
         // Dashboards
         Route::prefix('dashboard')->group(function () {
@@ -82,12 +102,43 @@ Route::prefix('v1')->group(function () {
         Route::prefix('students')->group(function () {
             Route::get('/', [StudentController::class, 'index'])->middleware('module:students');
             Route::post('/', [StudentController::class, 'store'])->middleware('permission:students.manage');
+            Route::get('/logo', [StudentController::class, 'logo'])->middleware('module:students');
             Route::get('/{id}', [StudentController::class, 'show'])->middleware('module:students');
+            Route::get('/{id}/pdf', [StudentController::class, 'downloadPdf'])->middleware('module:students');
             Route::put('/{id}', [StudentController::class, 'update'])->middleware('permission:students.manage');
             Route::delete('/{id}', [StudentController::class, 'destroy'])->middleware('permission:students.manage');
             Route::get('/{id}/avatar', [StudentController::class, 'avatar'])->middleware('module:students');
             Route::get('/{id}/academic-history', [StudentController::class, 'academicHistory'])->middleware('module:students');
             Route::get('/{id}/financial-summary', [StudentController::class, 'financialSummary'])->middleware('module:finance');
+        });
+
+        Route::prefix('school')->group(function () {
+            Route::get('/details', [SchoolDetailsController::class, 'show'])->middleware('permission:system.manage');
+            Route::put('/details', [SchoolDetailsController::class, 'update'])->middleware('permission:system.manage');
+            Route::get('/credentials', [SchoolCredentialController::class, 'show'])->middleware('permission:system.manage');
+            Route::get('/credentials/status', [SchoolCredentialController::class, 'status'])->middleware('permission:system.manage');
+            Route::put('/credentials', [SchoolCredentialController::class, 'update'])->middleware('permission:system.manage');
+            Route::post('/credentials/test', [SchoolCredentialController::class, 'test'])->middleware('permission:system.manage');
+            Route::get('/signatures', [SchoolSignatureController::class, 'show'])->middleware('permission:system.manage');
+            Route::post('/signatures', [SchoolSignatureController::class, 'update'])->middleware('permission:system.manage');
+            Route::delete('/signatures/{slot}', [SchoolSignatureController::class, 'destroy'])->middleware('permission:system.manage');
+        });
+
+        Route::prefix('message-center')->middleware('permission:system.manage')->group(function () {
+            Route::post('/send', [MessageCenterController::class, 'send']);
+            Route::get('/status/{batchId}', [MessageCenterController::class, 'status']);
+            Route::get('/birthday-settings', [MessageCenterController::class, 'birthdaySettings']);
+            Route::put('/birthday-settings', [MessageCenterController::class, 'saveBirthdaySettings']);
+        });
+
+        Route::prefix('events')->middleware('permission:system.manage')->group(function () {
+            Route::get('/', [SchoolEventController::class, 'index']);
+            Route::post('/', [SchoolEventController::class, 'store']);
+            Route::get('/{id}', [SchoolEventController::class, 'show']);
+            Route::put('/{id}', [SchoolEventController::class, 'update']);
+            Route::delete('/{id}', [SchoolEventController::class, 'destroy']);
+            Route::put('/{id}/participants', [SchoolEventController::class, 'syncParticipants']);
+            Route::get('/participants/{participantId}/certificate', [SchoolEventController::class, 'certificatePdf']);
         });
 
         // Teacher Management
@@ -223,9 +274,25 @@ Route::prefix('v1')->group(function () {
             Route::delete('/{id}/teacher-assignments/{assignmentId}', [SubjectController::class, 'destroyTeacherAssignment'])->middleware('permission:academic.manage');
         });
 
+        Route::prefix('timetable')->middleware('permission:system.manage')->group(function () {
+            Route::get('/time-slots', [TimetableController::class, 'timeSlots']);
+            Route::post('/time-slots', [TimetableController::class, 'storeTimeSlot']);
+            Route::put('/time-slots/{id}', [TimetableController::class, 'updateTimeSlot']);
+            Route::delete('/time-slots/{id}', [TimetableController::class, 'destroyTimeSlot']);
+            Route::get('/section', [TimetableController::class, 'getSectionTimetable']);
+            Route::get('/section/download', [TimetableController::class, 'downloadSectionTimetablePdf']);
+            Route::post('/section', [TimetableController::class, 'saveSectionTimetable']);
+        });
+
+        Route::prefix('timetable')->group(function () {
+            Route::get('/student/me', [TimetableController::class, 'studentTimetable'])->middleware('permission:student.view_timetable');
+            Route::get('/student/me/download', [TimetableController::class, 'downloadStudentTimetablePdf'])->middleware('permission:student.view_timetable');
+        });
+
         // Teacher academic operations (assigned subject/section scoped)
         Route::prefix('teacher-academics')->group(function () {
             Route::get('/assignments', [TeacherAcademicController::class, 'assignments'])->middleware('module:academic');
+            Route::get('/timetable', [TimetableController::class, 'teacherTimetable'])->middleware('module:academic');
             Route::get('/attendance-sheet', [TeacherAcademicController::class, 'attendanceSheet'])->middleware('module:attendance');
             Route::post('/attendance', [TeacherAcademicController::class, 'saveAttendance'])->middleware('module:attendance');
             Route::get('/marks-sheet', [TeacherAcademicController::class, 'marksSheet'])->middleware('module:academic');
@@ -233,17 +300,30 @@ Route::prefix('v1')->group(function () {
         });
 
         Route::prefix('admin-marks')->group(function () {
+            Route::get('/filters', [AdminMarksController::class, 'filters'])->middleware('permission:system.manage');
             Route::get('/sheet', [AdminMarksController::class, 'sheet'])->middleware('permission:system.manage');
             Route::post('/compile', [AdminMarksController::class, 'compile'])->middleware('permission:system.manage');
             Route::post('/finalize', [AdminMarksController::class, 'finalize'])->middleware('permission:system.manage');
         });
 
+        Route::prefix('audit-downloads')->group(function () {
+            Route::get('/catalog', [AuditDownloadController::class, 'catalog']);
+            Route::get('/logs', [AuditDownloadController::class, 'logs']);
+            Route::get('/logs/export', [AuditDownloadController::class, 'exportCsv']);
+            Route::get('/logs/archive', [AuditDownloadController::class, 'archive']);
+            Route::post('/logs', [AuditDownloadController::class, 'store']);
+        });
+
         Route::prefix('results')->group(function () {
-            Route::get('/published/sessions', [ResultPublishingController::class, 'publishedSessionOptions'])->middleware('module:academic');
+            Route::get('/published/sessions', [ResultPublishingController::class, 'publishedSessionOptions'])
+                ->middleware('permission:student.view_result,portal.parent.view,academic.view');
             Route::get('/sessions', [ResultPublishingController::class, 'sessions'])->middleware('permission:system.manage');
             Route::post('/sessions', [ResultPublishingController::class, 'createSession'])->middleware('permission:system.manage');
-            Route::get('/published', [ResultPublishingController::class, 'publishedResults'])->middleware('module:academic');
-            Route::get('/{studentResultId}/paper', [ResultPublishingController::class, 'resultPaper'])->middleware('module:academic');
+            Route::get('/published', [ResultPublishingController::class, 'publishedResults'])
+                ->middleware('permission:student.view_result,portal.parent.view,academic.view');
+            Route::get('/{studentResultId}/paper', [ResultPublishingController::class, 'resultPaper'])
+                ->name('results.paper')
+                ->middleware('permission:student.view_result,portal.parent.view,academic.view');
             Route::post('/publish', [ResultPublishingController::class, 'publish'])->middleware('permission:system.manage');
             Route::post('/publish/class-wise', [ResultPublishingController::class, 'publishClassWise'])->middleware('permission:system.manage');
             Route::post('/sessions/{sessionId}/lock', [ResultPublishingController::class, 'lockSession'])->middleware('permission:system.manage');
@@ -261,7 +341,9 @@ Route::prefix('v1')->group(function () {
             Route::get('/sessions', [AdmitCardController::class, 'sessions'])->middleware('permission:admit.view');
             Route::get('/sessions/{sessionId}/cards', [AdmitCardController::class, 'sessionCards'])->middleware('permission:admit.view');
             Route::get('/sessions/{sessionId}/paper', [AdmitCardController::class, 'bulkPaper'])->middleware('permission:admit.view');
-            Route::get('/{admitCardId}/paper/download', [AdmitCardController::class, 'paperPdf'])->middleware('permission:admit.view');
+            Route::get('/{admitCardId}/paper/download', [AdmitCardController::class, 'paperPdf'])
+                ->name('admit.cards.paper.download')
+                ->middleware('permission:student.view_admit_card,admit.view');
             Route::post('/generate', [AdmitCardController::class, 'generate'])->middleware('permission:admit.generate');
             Route::post('/sessions/{sessionId}/publish', [AdmitCardController::class, 'publishSession'])->middleware('permission:admit.publish');
             Route::post('/{admitCardId}/visibility', [AdmitCardController::class, 'setVisibility'])->middleware('permission:admit.manage_visibility');

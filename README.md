@@ -1,18 +1,21 @@
 # School Management System (SMS) - Current Project README
 
-Laravel 12 API backend for a school management system with active modules for authentication, student lifecycle, attendance, finance, transport billing, and expense durability controls.
+Laravel 12 API backend for a school management system with active modules for authentication, student lifecycle, attendance, finance, transport billing, expense durability controls, and polling-based in-app notifications.
 
 ## Current Status (as of February 22, 2026)
 
 Implemented and active:
 - Authentication via Laravel Sanctum (`/api/v1/login`, logout, token revocation)
 - Role-based and module-based middleware authorization
+- In-app notifications with a per-user database-backed feed under `/api/v1/notifications/*`
+- Angular bell badge, recent dropdown, and full notification page backed by polling
 - Student lifecycle management (CRUD, avatar, academic history, financial summary)
 - Enrollment workflows (create, update, promote, repeat, transfer)
 - Attendance workflows
 - Marking, section/student views, lock flow, section statistics
 - Report search and live search
 - Monthly/session reports + bulk monthly exports
+- Teacher attendance and self-attendance actions now surface to super admin/school admin via in-app notifications
 - Academic structure and session controls
 - Academic years (`current`, set current, close), classes, and sections
 - Finance core
@@ -36,7 +39,7 @@ Implemented and active:
 - Scheduled backup/restore in `routes/console.php`
 
 Partially implemented / pending:
-- Subject, exam, result, staff, timetable, library, and notification APIs remain commented/scaffolded and are not fully active.
+- Library APIs remain commented/scaffolded and are not fully active.
 
 ## Tech Stack
 
@@ -99,6 +102,9 @@ Recent frontend updates:
 - Live attendance search supports student/admission/enrollment identifiers
 - Bulk monthly attendance exports available
 - Attendance/classes/sections views improved for mobile devices
+- Header bell now shows unread in-app notifications with recent items
+- `/notifications` page supports mark-read and mark-all-read flows
+- Super admin dashboard notification area reflects teacher attendance activity
 
 ## Local Dev Commands
 
@@ -109,6 +115,7 @@ composer run dev
 
 - Run tests:
 ```bash
+composer test:preflight
 php artisan test
 ```
 
@@ -121,6 +128,16 @@ php artisan ops:restore-drill
 - Run scheduler worker:
 ```bash
 php artisan schedule:work
+```
+
+- Run the dedicated email queue worker:
+```powershell
+composer queue:emails
+```
+
+- Run the email worker directly:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-email-worker.ps1
 ```
 
 - Run durability governance audit:
@@ -139,6 +156,17 @@ Example explicit override:
 ```bash
 TEST_DB_CONNECTION=mysql TEST_DB_DATABASE=sms_test php artisan test
 ```
+
+Recommended first step on any new machine:
+
+```bash
+composer test:preflight
+```
+
+That command tells you whether the machine can run the full suite via:
+- in-memory SQLite
+- explicit `TEST_DB_*` settings
+- MySQL fallback
 
 ## Authentication Quick Start
 
@@ -161,6 +189,7 @@ Authorization: Bearer <token>
 ## Key API Areas
 
 - Auth: `POST /api/v1/login`, `POST /api/v1/logout`, `GET /api/v1/user`
+- Notifications: `GET /api/v1/notifications`, `GET /api/v1/notifications/unread-count`, `GET /api/v1/notifications/recent`, `POST /api/v1/notifications/{id}/read`, `POST /api/v1/notifications/mark-all-read`
 - Students: `GET|POST|PUT|DELETE /api/v1/students/*`
 - Enrollments: `GET|POST|PUT /api/v1/enrollments/*` + promote/repeat/transfer
 - Attendance: mark, reports, statistics, lock under `/api/v1/attendance/*`
@@ -184,10 +213,14 @@ These tests cover balanced ledger posting, idempotency/reversal safeguards, lock
 
 - Receipt verification page:
 - `GET /verify/receipts/{receiptNumber}`
+- In-app notifications are implemented using DB + REST + polling. No WebSockets/Reverb are required.
+- Local or production environments must apply the `user_notifications` migration before testing the bell or notification page.
 - Finance receipt/PDF flows include recent reliability fixes (logo fallback/data fallback).
+- Email notifications are queued on the `emails` queue. For registration, update, admit, result, payment, and profile-PDF emails to send reliably, keep an email queue worker running continuously.
 
 Reference docs:
 - `QUICKSTART.md`
+- `USER_MANUAL.md`
 - `PROJECT_SUMMARY.md`
 - `DATABASE_SCHEMA.md`
 - `DURABILITY_STANDARD.md`

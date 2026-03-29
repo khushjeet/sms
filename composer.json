@@ -13,7 +13,8 @@
         "barryvdh/laravel-dompdf": "*",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.3",
-        "laravel/tinker": "^2.10.1"
+        "laravel/tinker": "^2.10.1",
+        "simplesoftwareio/simple-qrcode": "^4.2"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
@@ -54,6 +55,15 @@
         "test": [
             "@php artisan config:clear --ansi",
             "@php artisan test"
+        ],
+        "test:preflight": [
+            "@php artisan ops:test-preflight"
+        ],
+        "package:deploy": [
+            "powershell -ExecutionPolicy Bypass -File .\\scripts\\prepare-zip-deploy.ps1"
+        ],
+        "queue:emails": [
+            "powershell -ExecutionPolicy Bypass -File .\\scripts\\start-email-worker.ps1"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",

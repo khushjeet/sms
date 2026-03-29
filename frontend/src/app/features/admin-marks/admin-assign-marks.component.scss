@@ -89,6 +89,17 @@
   padding: 8px 10px;
 }
 
+.absent-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.absent-toggle input {
+  width: auto;
+}
+
 .error {
   color: #b91c1c;
   background: #fee2e2;

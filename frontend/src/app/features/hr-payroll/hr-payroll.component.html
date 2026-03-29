@@ -314,11 +314,97 @@
         </div>
         <div class="table__row table__row--items" *ngFor="let item of detail.items">
           <span>{{ item.id }}</span>
-          <span>{{ item.staff_id }}</span>
-          <span>{{ item.net_pay }}</span>
-          <span>{{ item.gross_pay }}</span>
-          <span>{{ item.total_deductions }}</span>
-          <span><pre>{{ item.snapshot | json }}</pre></span>
+          <span>{{ item.snapshot.employee_id || item.staff_id }}</span>
+          <span>{{ formatMoney(item.net_pay) }}</span>
+          <span>{{ formatMoney(item.gross_pay) }}</span>
+          <span>{{ formatMoney(item.total_deductions) }}</span>
+          <span class="snapshot-cell">
+            <div class="snapshot-card">
+              <div class="snapshot-card__top">
+                <div>
+                  <strong>{{ item.snapshot.employee_id || ('Staff #' + item.staff_id) }}</strong>
+                  <p>Structure #{{ item.snapshot.salary_structure_id || '-' }} • Template #{{ item.snapshot.salary_template_id || '-' }}</p>
+                </div>
+                <div class="snapshot-chip-group">
+                  <span class="snapshot-chip">Effective: {{ item.snapshot.effective_from || '-' }}</span>
+                  <span class="snapshot-chip" *ngIf="item.snapshot.effective_to">To: {{ item.snapshot.effective_to }}</span>
+                </div>
+              </div>
+
+              <div class="snapshot-metrics" *ngIf="payrollSnapshotComputed(item) as computed">
+                <div>
+                  <span>Full Gross</span>
+                  <strong>{{ formatMoney(computed.full_month_gross) }}</strong>
+                </div>
+                <div>
+                  <span>Full Deduction</span>
+                  <strong>{{ formatMoney(computed.full_month_deductions) }}</strong>
+                </div>
+                <div>
+                  <span>Prorated Gross</span>
+                  <strong>{{ formatMoney(computed.pro_rated_gross) }}</strong>
+                </div>
+                <div>
+                  <span>Prorated Deduction</span>
+                  <strong>{{ formatMoney(computed.pro_rated_deductions) }}</strong>
+                </div>
+                <div>
+                  <span>Net Pay</span>
+                  <strong>{{ formatMoney(computed.net) }}</strong>
+                </div>
+              </div>
+
+              <div class="snapshot-attendance" *ngIf="payrollSnapshotAttendance(item) as attendance">
+                <div class="snapshot-section">
+                  <h5>Attendance</h5>
+                  <div class="snapshot-grid">
+                    <div><span>Present</span><strong>{{ attendance.present }}</strong></div>
+                    <div><span>Leave</span><strong>{{ attendance.leave }}</strong></div>
+                    <div><span>Half Day</span><strong>{{ attendance.half_day }}</strong></div>
+                    <div><span>Absent</span><strong>{{ attendance.absent }}</strong></div>
+                    <div><span>Unmarked</span><strong>{{ attendance.unmarked }}</strong></div>
+                    <div><span>Days In Month</span><strong>{{ attendance.days_in_month }}</strong></div>
+                    <div><span>Payable Days</span><strong>{{ attendance.payable_days }}</strong></div>
+                    <div><span>Pay Ratio</span><strong>{{ formatPercent(attendance.pay_ratio) }}</strong></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="snapshot-section" *ngIf="payrollSnapshotComponents(item).length">
+                <h5>Components</h5>
+                <div class="snapshot-components">
+                  <div class="snapshot-component" *ngFor="let component of payrollSnapshotComponents(item)">
+                    <div>
+                      <strong>{{ component.name }}</strong>
+                      <p>{{ component.type === 'deduction' ? 'Deduction' : 'Earning' }}</p>
+                    </div>
+                    <div class="snapshot-component__meta">
+                      <strong>{{ formatMoney(component.amount) }}</strong>
+                      <small *ngIf="component.source_percentage !== null && component.source_percentage !== undefined">
+                        {{ component.source_percentage }}%
+                      </small>
+                      <small *ngIf="component.source_percentage === null || component.source_percentage === undefined">
+                        Fixed
+                      </small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="snapshot-section" *ngIf="payrollAdjustments(item).length">
+                <h5>Adjustments</h5>
+                <div class="snapshot-adjustments">
+                  <div class="snapshot-adjustment" *ngFor="let adjustment of payrollAdjustments(item)">
+                    <div>
+                      <strong>{{ adjustment.adjustment_type }}</strong>
+                      <p>{{ adjustment.remarks || 'No remarks' }}</p>
+                    </div>
+                    <strong>{{ adjustmentAmount(adjustment.amount) }}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </span>
         </div>
       </div>
     </div>

@@ -305,7 +305,9 @@ export class StudentFormComponent {
       }
       formData.append(key, String(value));
     });
-    formData.append('image', this.selectedImage);
+    if (this.selectedImage) {
+      formData.append('image', this.selectedImage);
+    }
     return formData;
   }
 }

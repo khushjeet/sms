@@ -8,6 +8,8 @@ export interface AttendanceListItem {
   enrollment_id: number;
   roll_number?: number | null;
   student_name: string;
+  class_name?: string | null;
+  section_name?: string | null;
   status: string;
   remarks?: string | null;
   marked_by?: string | null;

@@ -1,7 +1,7 @@
 <div class="attendance">
   <div class="attendance__header">
     <h2>Mark Attendance</h2>
-    <p>Attendance is limited to your allotted subject/section assignments.</p>
+    <p>Attendance is limited to your allotted subject and class or section assignments.</p>
   </div>
 
   <p class="error" *ngIf="error()">{{ error() }}</p>
@@ -11,7 +11,7 @@
     <select [ngModel]="assignmentId()" (ngModelChange)="assignmentId.set($event); loadSheet()">
       <option value="">Select allotted subject</option>
       <option *ngFor="let assignment of assignments()" [value]="assignment.id">
-        {{ assignment.class_name }} - {{ assignment.section_name }} - {{ assignment.subject_name }} - {{ assignment.mapped_exam_configuration_name || 'Exam Not Mapped' }}
+        {{ assignment.class_name }} - {{ assignment.section_name || 'All Sections' }} - {{ assignment.subject_name }} - {{ assignment.mapped_exam_configuration_name || 'Exam Not Mapped' }}
       </option>
     </select>
     <input type="date" [ngModel]="date()" (ngModelChange)="date.set($event)" />

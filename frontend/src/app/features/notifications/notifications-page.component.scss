@@ -1,0 +1,111 @@
+.notifications-page {
+  display: grid;
+  gap: 18px;
+}
+
+.notifications-page__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 24px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #fff, #f6fbff);
+  border: 1px solid #dbeafe;
+}
+
+.notifications-page__eyebrow {
+  margin: 0 0 8px;
+  color: #0369a1;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.notifications-page__header h2,
+.notifications-page__card h3 {
+  margin: 0 0 6px;
+}
+
+.notifications-page__header button,
+.notifications-page__pager button,
+.notifications-page__filters button {
+  border: none;
+  border-radius: 999px;
+  background: #0f172a;
+  color: #fff;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+.notifications-page__filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.notifications-page__filters button {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.notifications-page__filters button.active {
+  background: #0f172a;
+  color: #fff;
+}
+
+.notifications-page__card {
+  padding: 18px 20px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+}
+
+.notifications-page__card.is-unread {
+  border-color: #38bdf8;
+  box-shadow: 0 8px 24px rgba(56, 189, 248, 0.12);
+}
+
+.notifications-page__card.priority-important {
+  background: linear-gradient(135deg, #fff, #fffbeb);
+}
+
+.notifications-page__card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 0.82rem;
+  color: #475569;
+}
+
+.notifications-page__type {
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.notifications-page__pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.notifications-page__error {
+  color: #b91c1c;
+}
+
+.notifications-page__empty {
+  margin: 0;
+  color: #64748b;
+}
+
+@media (max-width: 720px) {
+  .notifications-page__header,
+  .notifications-page__pager {
+    display: grid;
+  }
+}

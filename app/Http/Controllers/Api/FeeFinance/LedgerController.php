@@ -9,6 +9,7 @@ use App\Models\Payment;
 use App\Models\Student;
 use App\Models\StudentFeeLedger;
 use App\Services\Accounting\AccountingService;
+use App\Services\Email\EventNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -269,6 +270,16 @@ class LedgerController extends Controller
                     AuditLog::log('create', $ledgerRow, null, $ledgerRow->toArray(), 'Ledger reversal (projection) created: ' . $data['reason']);
                 }
 
+                DB::afterCommit(function () use ($posted) {
+                    foreach ($posted['student_fee_ledgers'] as $ledgerRow) {
+                        app(EventNotificationService::class)->notifyStudentLedgerRecorded(
+                            $ledgerRow->fresh(['enrollment.student.user', 'enrollment.student.profile', 'enrollment.student.parents.user', 'enrollment.section.class', 'enrollment.classModel', 'enrollment.academicYear']),
+                            'Student ledger reversal posted',
+                            'A reversal entry has been posted to the student account.'
+                        );
+                    }
+                });
+
                 return response()->json([
                     'journal_entry' => $posted['journal_entry'],
                     'ledger_entries' => $posted['student_fee_ledgers'],
@@ -289,6 +300,14 @@ class LedgerController extends Controller
             ]);
 
             AuditLog::log('create', $reversal, null, $reversal->toArray(), 'Ledger reversal created: ' . $data['reason']);
+
+            DB::afterCommit(function () use ($reversal) {
+                app(EventNotificationService::class)->notifyStudentLedgerRecorded(
+                    $reversal->fresh(['enrollment.student.user', 'enrollment.student.profile', 'enrollment.student.parents.user', 'enrollment.section.class', 'enrollment.classModel', 'enrollment.academicYear']),
+                    'Student ledger reversal posted',
+                    'A reversal entry has been posted to the student account.'
+                );
+            });
 
             return response()->json($reversal, 201);
         });
@@ -317,6 +336,14 @@ class LedgerController extends Controller
 
         $entry = $posted['student_fee_ledger'];
         AuditLog::log('create', $entry, null, $entry->toArray(), 'Special fee posted (projection)');
+
+        DB::afterCommit(function () use ($entry) {
+            app(EventNotificationService::class)->notifyStudentLedgerRecorded(
+                $entry->fresh(['enrollment.student.user', 'enrollment.student.profile', 'enrollment.student.parents.user', 'enrollment.section.class', 'enrollment.classModel', 'enrollment.academicYear']),
+                'Special fee posted',
+                'A special fee has been added to the student account.'
+            );
+        });
 
         return response()->json($entry, 201);
     }

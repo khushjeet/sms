@@ -1,29 +1,93 @@
 <div class="dashboard" *ngIf="!isStudent()">
-  <div class="dashboard__header">
-    <h2>Dashboard</h2>
-    <p>Overview of academic, attendance, and finance operations.</p>
-  </div>
+  <section class="dashboard-hero">
+    <div class="dashboard-hero__copy">
+      <p class="eyebrow">Demo Command Center</p>
+      <h2>School operations that feel connected, accountable, and premium.</h2>
+      <p>{{ schoolStageLabel() }}</p>
+      <div class="dashboard-hero__badges">
+        <span>Admissions</span>
+        <span>Academics</span>
+        <span>Finance</span>
+        <span>Communication</span>
+        <span>HR & Payroll</span>
+      </div>
+    </div>
+
+    <div class="dashboard-hero__panel">
+      <p class="dashboard-hero__label">Best demo sequence</p>
+      <ol class="demo-sequence">
+        <li>New student or existing profile</li>
+        <li>Enrollment and attendance</li>
+        <li>Fee receipt or result publishing</li>
+        <li>Student/parent portal experience</li>
+      </ol>
+    </div>
+  </section>
+
+  <section
+    class="ops-alert"
+    *ngIf="emailHealthAlert() as health"
+    [class.ops-alert--critical]="health.status === 'critical'"
+    [class.ops-alert--warning]="health.status === 'warning'"
+  >
+    <div>
+      <p class="eyebrow">Email Ops</p>
+      <h3>Email delivery status needs attention</h3>
+      <p>{{ health.message }}</p>
+    </div>
+    <div class="ops-alert__stats">
+      <span>SMTP {{ health.smtp_enabled ? 'On' : 'Off' }}</span>
+      <span>Pending {{ health.queue_pending_count }}</span>
+      <span>Failed {{ health.queue_failed_count }}</span>
+      <a routerLink="/credentials">Open Credentials</a>
+      <a routerLink="/admin/send-message">Open Message Center</a>
+    </div>
+  </section>
 
   <div class="dashboard__grid">
-    <div class="card">
-      <h3>Students</h3>
-      <p>Manage student lifecycle and profiles.</p>
-    </div>
-    <div class="card">
-      <h3>Attendance</h3>
-      <p>Record and review attendance data.</p>
-    </div>
-    <div class="card">
-      <h3>Finance</h3>
-      <p>Track fees, payments, and reports.</p>
-    </div>
-    <div class="card">
-      <h3>Expenses</h3>
-      <p>Track operational expenses with append-only and reversal flow.</p>
-    </div>
+    <article class="card card--highlight" *ngFor="let item of overviewHighlights()">
+      <p class="card__label">{{ item.label }}</p>
+      <strong>{{ item.value }}</strong>
+      <p>{{ item.caption }}</p>
+      <span class="tone-pill" [class.tone-pill--blue]="item.tone === 'blue'" [class.tone-pill--amber]="item.tone === 'amber'" [class.tone-pill--green]="item.tone === 'green'">
+        Live
+      </span>
+    </article>
   </div>
 
+  <section class="quick-actions-panel">
+    <div class="section-head">
+      <div>
+        <h3>Quick Demo Actions</h3>
+        <p>Jump straight into the screens most likely to impress the school tomorrow.</p>
+      </div>
+    </div>
+    <div class="quick-actions-grid">
+      <a class="quick-action" *ngFor="let item of quickActions()" [routerLink]="item.route">
+        <strong>{{ item.label }}</strong>
+        <span>{{ item.caption }}</span>
+      </a>
+    </div>
+  </section>
+
   <section class="staff-tools">
+    <article class="tool-card tool-card--wide">
+      <div class="section-head">
+        <div>
+          <h3>Showcase Flows</h3>
+          <p>These are the strongest connected journeys already available in the product.</p>
+        </div>
+      </div>
+      <div class="showcase-grid">
+        <a class="showcase-card" *ngFor="let item of spotlightCards()" [routerLink]="item.route">
+          <p class="showcase-card__value">{{ item.value }}</p>
+          <strong>{{ item.title }}</strong>
+          <span>{{ item.description }}</span>
+          <em>{{ item.cta }}</em>
+        </a>
+      </div>
+    </article>
+
     <article class="tool-card">
       <h3>Notifications</h3>
       <p class="muted" *ngIf="notifications().length === 0">No new notifications.</p>
@@ -91,52 +155,128 @@
         </button>
       </div>
     </article>
+
+    <article class="tool-card">
+      <h3>Demo Talking Points</h3>
+      <div class="demo-moments">
+        <div class="demo-moment" *ngFor="let item of demoMoments()">
+          <strong>{{ item.title }}</strong>
+          <p>{{ item.detail }}</p>
+        </div>
+      </div>
+    </article>
   </section>
 </div>
 
-<div class="student-dashboard" *ngIf="isStudent()">
+<div class="student-dashboard" *ngIf="isStudent()" [class.student-dashboard--dark]="isStudentDarkMode()" [class.student-dashboard--light]="!isStudentDarkMode()">
   <header class="student-dashboard__hero">
     <div>
+      <p class="eyebrow">Student Experience</p>
       <h2>Welcome, {{ data()?.profile_summary?.full_name || 'Student' }}</h2>
       <p class="muted">Academic year-scoped student dashboard</p>
+      <div class="student-hero-badges" *ngIf="data() as vm">
+        <span>{{ vm.profile_summary.class || 'Class' }}</span>
+        <span>{{ vm.profile_summary.section || 'Section' }}</span>
+        <span>{{ vm.profile_summary.academic_year || 'Academic Year' }}</span>
+      </div>
     </div>
 
-    <form class="filters" [formGroup]="filters" (ngSubmit)="reload()">
-      <label>
-        <span>Academic Year</span>
-        <select formControlName="academic_year_id">
-          <option value="">Auto</option>
-          <option *ngFor="let year of yearOptions()" [value]="year.id">{{ year.name }}</option>
-        </select>
-      </label>
+    <div class="student-dashboard__actions">
+      <button
+        type="button"
+        class="theme-switch"
+        [attr.aria-pressed]="isStudentDarkMode()"
+        [attr.aria-label]="isStudentDarkMode() ? 'Switch to light mode' : 'Switch to dark mode'"
+        (click)="toggleStudentTheme()">
+        <span class="theme-switch__label">Dark Mode</span>
+        <span class="theme-switch__track" [class.theme-switch__track--active]="isStudentDarkMode()">
+          <span class="theme-switch__thumb"></span>
+        </span>
+      </button>
 
-      <label>
-        <span>Month</span>
-        <input type="month" formControlName="month" />
-      </label>
+      <form class="filters" [formGroup]="filters" (ngSubmit)="reload()">
+        <label>
+          <span>Academic Year</span>
+          <select formControlName="academic_year_id">
+            <option value="">Auto</option>
+            <option *ngFor="let year of yearOptions()" [value]="year.id">{{ year.name }}</option>
+          </select>
+        </label>
 
-      <button type="submit" [disabled]="loading()">Apply</button>
-    </form>
+        <label>
+          <span>Month</span>
+          <input type="month" formControlName="month" />
+        </label>
+
+        <button type="submit" [disabled]="loading()">Apply</button>
+      </form>
+    </div>
   </header>
 
   <p class="error" *ngIf="error()">{{ error() }}</p>
 
   <section class="stats" *ngIf="data() as vm">
-    <article class="stat-card">
-      <h3>Attendance %</h3>
-      <strong>{{ vm.quick_stats.attendance_percent | number : '1.0-2' }}</strong>
+    <article class="stat-card stat-card--premium" *ngFor="let item of studentQuickInsight()">
+      <p class="card__label">{{ item.label }}</p>
+      <strong>{{ item.value }}</strong>
+      <span>{{ item.caption }}</span>
     </article>
-    <article class="stat-card">
-      <h3>Pending Fee</h3>
-      <strong>{{ vm.quick_stats.pending_fee | number : '1.0-2' }}</strong>
+  </section>
+
+  <section class="student-focus-grid" *ngIf="data() as vm">
+    <article class="panel panel--focus">
+      <div class="panel__head">
+        <div>
+          <h3>Attendance Momentum</h3>
+          <p class="muted">This month’s classroom presence and last 7 recorded days.</p>
+        </div>
+        <strong>{{ vm.attendance_overview.monthly_percentage | number : '1.0-2' }}%</strong>
+      </div>
+      <div class="progress">
+        <div class="progress__fill" [style.width.%]="attendanceProgressWidth()"></div>
+      </div>
+      <div class="attendance-trail">
+        <div class="attendance-trail__item" *ngFor="let day of vm.attendance_overview.last_7_days">
+          <span>{{ day.date || '-' }}</span>
+          <strong>{{ day.status || '-' }}</strong>
+        </div>
+      </div>
     </article>
-    <article class="stat-card">
-      <h3>Upcoming Exam</h3>
-      <strong>{{ vm.quick_stats.upcoming_exam || 'N/A' }}</strong>
-    </article>
-    <article class="stat-card">
-      <h3>Assignments Due</h3>
-      <strong>{{ vm.quick_stats.assignments_due }}</strong>
+
+    <article class="panel panel--focus">
+      <div class="panel__head">
+        <div>
+          <h3>Fee Progress</h3>
+          <p class="muted">Show parents how much is paid and what remains pending.</p>
+        </div>
+        <strong>{{ vm.fee_summary.pending_amount | number : '1.0-2' }}</strong>
+      </div>
+      <div class="progress progress--warm">
+        <div class="progress__fill progress__fill--warm" [style.width.%]="feeProgressWidth()"></div>
+      </div>
+      <div class="focus-metrics">
+        <div>
+          <span>Paid</span>
+          <strong>{{ vm.fee_summary.paid_amount | number : '1.0-2' }}</strong>
+        </div>
+        <div>
+          <span>Total</span>
+          <strong>{{ vm.fee_summary.total_fee | number : '1.0-2' }}</strong>
+        </div>
+        <div>
+          <span>Receipt</span>
+          <strong>{{ vm.fee_summary.last_receipt_number || '-' }}</strong>
+        </div>
+      </div>
+      <a
+        *ngIf="vm.fee_summary.receipt_download_available && vm.fee_summary.receipt_download_url"
+        class="panel-link"
+        [href]="vm.fee_summary.receipt_download_url"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Open Latest Receipt
+      </a>
     </article>
   </section>
 
@@ -147,7 +287,10 @@
       <p><span>Roll No:</span> {{ vm.profile_summary.roll_number || '-' }}</p>
       <p><span>Class:</span> {{ vm.profile_summary.class || '-' }}</p>
       <p><span>Section:</span> {{ vm.profile_summary.section || '-' }}</p>
-      <p><span>Academic Year:</span> {{ vm.profile_summary.academic_year || '-' }}</p>
+      <p class="key-grid__item key-grid__item--stacked">
+        <span>Academic Year:</span>
+        <strong>{{ vm.profile_summary.academic_year || '-' }}</strong>
+      </p>
       <p><span>Blood Group:</span> {{ vm.profile_summary.blood_group || '-' }}</p>
     </div>
   </section>
@@ -273,7 +416,7 @@
       </a>
       <a routerLink="/student/attendance-history" class="option-tile" [class.option-tile--disabled]="!widgetEnabled('attendance')">
         <span class="option-title">Attendance History</span>
-        <span class="option-sub">Daily/monthly attendance records</span>
+        <span class="option-sub">Class and section attendance records</span>
       </a>
     </div>
   </section>

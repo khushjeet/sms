@@ -17,11 +17,15 @@ export interface AdmitPaperResponse {
   school: {
     name: string | null;
     logo_url: string | null;
+    logo_data_url?: string | null;
     address: string | null;
     phone?: string | null;
     website?: string | null;
     reg_no?: string | null;
     udise?: string | null;
+    watermark_text?: string | null;
+    watermark_logo_url?: string | null;
+    watermark_logo_data_url?: string | null;
   };
   admit_card: {
     id: number;
@@ -73,13 +77,17 @@ export interface BulkAdmitPaperResponse {
   school: {
     name: string | null;
     logo_url: string | null;
+    logo_data_url?: string | null;
     address: string | null;
     phone?: string | null;
     website?: string | null;
     reg_no?: string | null;
     udise?: string | null;
+    watermark_text?: string | null;
+    watermark_logo_url?: string | null;
+    watermark_logo_data_url?: string | null;
   };
-  exam_session: {
+  session: {
     id: number;
     name: string | null;
     status: string | null;
@@ -87,5 +95,7 @@ export interface BulkAdmitPaperResponse {
     academic_year: string | null;
     exam_configuration: string | null;
   };
-  admit_cards: AdmitPaperResponse['admit_card'][];
+  admitCards: AdmitPaperResponse['admit_card'][];
 }
+
+

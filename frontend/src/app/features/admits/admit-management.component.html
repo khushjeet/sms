@@ -1,11 +1,52 @@
 <section class="admit-management">
   <header>
     <h2>Admit Management</h2>
-    <p class="muted">Session-based admit generation and publishing.</p>
+    <p class="muted">{{ isStudent() ? 'Your latest published admit card.' : 'Session-based admit generation and publishing.' }}</p>
   </header>
 
   <p class="error" *ngIf="error()">{{ error() }}</p>
   <p class="ok" *ngIf="message()">{{ message() }}</p>
+
+  <ng-container *ngIf="isStudent(); else adminAdmitView">
+    <div class="table-wrap">
+      <div class="section-head">
+        <h3>My Admit Card</h3>
+      </div>
+      <p class="muted" *ngIf="myAdmitLoading()">Loading admit card...</p>
+      <p class="muted" *ngIf="!myAdmitLoading() && !myAdmit()">No admit card available.</p>
+      <table *ngIf="!myAdmitLoading() && myAdmit() as card">
+        <thead>
+          <tr>
+            <th>Exam</th>
+            <th>Status</th>
+            <th>Version</th>
+            <th>Published At</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{{ card.exam_name || '-' }}</td>
+            <td>{{ myAdmitState() || card.status || '-' }}</td>
+            <td>{{ card.version }}</td>
+            <td>{{ card.published_at || '-' }}</td>
+            <td class="actions">
+              <button
+                type="button"
+                class="bulk"
+                (click)="downloadMyAdmit()"
+                [disabled]="bulkLoading() || !card.download_url"
+              >
+                {{ bulkLoading() ? 'Working...' : 'Download' }}
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </ng-container>
+
+  <ng-template #adminAdmitView>
 
   <div class="toolbar">
     <label>
@@ -188,4 +229,5 @@
       </tbody>
     </table>
   </div>
+  </ng-template>
 </section>

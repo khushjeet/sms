@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,6 +15,8 @@ use Illuminate\Validation\ValidationException;
 
 class NewPasswordController extends Controller
 {
+    private const RESETTABLE_ROLES = ['super_admin', 'school_admin', 'accountant', 'teacher', 'staff', 'hr', 'principal'];
+
     /**
      * Handle an incoming new password request.
      *
@@ -26,6 +29,19 @@ class NewPasswordController extends Controller
             'email' => ['required', 'email'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
+
+        $user = User::query()
+            ->where('email', $request->string('email')->toString())
+            ->whereNull('deleted_at')
+            ->where('status', 'active')
+            ->whereIn('role', self::RESETTABLE_ROLES)
+            ->first();
+
+        if (!$user) {
+            throw ValidationException::withMessages([
+                'email' => ['This account is not eligible for password reset.'],
+            ]);
+        }
 
         // Here we will attempt to reset the user's password. If it is successful we
         // will update the password on an actual user model and persist it to the

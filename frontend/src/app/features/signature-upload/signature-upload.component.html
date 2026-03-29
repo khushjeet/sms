@@ -1,0 +1,196 @@
+<section class="signature-upload">
+  <div class="signature-upload__header">
+    <h2>Signature Upload</h2>
+    <p>These signatures are used in the student details PDF for principal and director approval.</p>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="message()">{{ message() }}</p>
+
+  <article class="card">
+    <h3>Upload Mode</h3>
+    <form [formGroup]="form" class="form">
+      <select formControlName="mode" (change)="onModeChange()">
+        <option value="principal">Principal</option>
+        <option value="director">Director</option>
+        <option value="employee">Employee</option>
+      </select>
+
+      <ng-container *ngIf="currentMode() === 'employee'">
+        <input formControlName="employee_search" placeholder="Search employee by name, email, or ID" />
+        <button type="button" [disabled]="loading()" (click)="loadEmployees()">
+          {{ loading() ? 'Loading...' : 'Load Employees' }}
+        </button>
+      </ng-container>
+    </form>
+  </article>
+
+  <article class="card" *ngIf="currentMode() === 'employee'">
+    <h3>Select Employee</h3>
+    <select class="selector" (change)="selectEmployee(($any($event.target).value || '').toString())">
+      <option value="">Choose employee</option>
+      <option *ngFor="let employee of employees()" [value]="employee.id">
+        {{ employeeName(employee) }} - {{ employee.designation || employee.user?.role || '-' }} - {{ employee.employee_id }}
+      </option>
+    </select>
+
+    <div class="summary-grid" *ngIf="selectedEmployee() as employee">
+      <p><span>Name:</span> {{ employeeName(employee) }}</p>
+      <p><span>Designation:</span> {{ employee.designation || '-' }}</p>
+      <p><span>Role:</span> {{ employee.user?.role || '-' }}</p>
+      <p><span>Employee ID:</span> {{ employee.employee_id }}</p>
+    </div>
+
+    <div [formGroup]="form" *ngIf="selectedEmployee()">
+      <label class="slot-label">
+        <span>Apply this upload to</span>
+        <select formControlName="target_slot">
+          <option value="principal">Principal Signature</option>
+          <option value="director">Director Signature</option>
+        </select>
+      </label>
+    </div>
+  </article>
+
+  <article class="card" *ngIf="currentMode() !== 'employee' || selectedEmployee()">
+    <div class="student-header">
+      <div>
+        <h3>{{ slotLabel(currentSlot()) }} Signature</h3>
+        <p class="muted">
+          <span *ngIf="currentMode() === 'employee' && selectedEmployee() as employee">
+            Selected employee: {{ employeeName(employee) }}
+          </span>
+          <span *ngIf="currentMode() !== 'employee'">
+            Direct upload to the {{ slotLabel(currentSlot()).toLowerCase() }} PDF slot.
+          </span>
+        </p>
+      </div>
+    </div>
+
+    <div class="preview-grid">
+      <div class="preview-card">
+        <h4>Current Principal Signature</h4>
+        <img
+          *ngIf="fileUrl(signatures()?.principal_signature_path) as principalUrl; else noPrincipalSignature"
+          [src]="principalUrl"
+          alt="Principal signature"
+          class="signature-image"
+        />
+        <ng-template #noPrincipalSignature>
+          <p class="muted">No principal signature uploaded yet.</p>
+        </ng-template>
+        <button
+          type="button"
+          class="danger"
+          *ngIf="signatures()?.principal_signature_path"
+          (click)="deleteSignature('principal')"
+          [disabled]="saving()"
+        >
+          Delete Principal Signature
+        </button>
+      </div>
+
+      <div class="preview-card">
+        <h4>Current Director Signature</h4>
+        <img
+          *ngIf="fileUrl(signatures()?.director_signature_path) as directorUrl; else noDirectorSignature"
+          [src]="directorUrl"
+          alt="Director signature"
+          class="signature-image"
+        />
+        <ng-template #noDirectorSignature>
+          <p class="muted">No director signature uploaded yet.</p>
+        </ng-template>
+        <button
+          type="button"
+          class="danger"
+          *ngIf="signatures()?.director_signature_path"
+          (click)="deleteSignature('director')"
+          [disabled]="saving()"
+        >
+          Delete Director Signature
+        </button>
+      </div>
+    </div>
+
+    <div class="upload-card">
+      <h4>New {{ slotLabel(currentSlot()) }} Signature</h4>
+      <input type="file" accept="image/*" (change)="onFileSelected($event)" />
+      <p class="muted" *ngIf="selectedFile() as file">{{ file.name }}</p>
+      <button type="button" class="danger" *ngIf="selectedFile()" (click)="clearFile()">Clear</button>
+    </div>
+
+    <button type="button" (click)="save()" [disabled]="saving()">
+      {{ saving() ? 'Uploading...' : 'Upload Signature' }}
+    </button>
+  </article>
+
+  <article class="card">
+    <div class="card-heading">
+      <div>
+        <h3>School Details</h3>
+        <p class="muted">Please upload or fill: SCHOOL_NAME, SCHOOL_WEBSITE, SCHOOL_PHONE, SCHOOL_LOGO, SCHOOL_WATERMARK_TEXT, SCHOOL_WATERMARK_LOGO, SCHOOL_ADDRESS, SCHOOL_REGISTRATION_NUMBER, and SCHOOL_UDISE_CODE.</p>
+      </div>
+      <div class="logo-preview" *ngIf="schoolLogoPreviewUrl() as logoUrl; else noSchoolLogo">
+        <img [src]="logoUrl" alt="School logo preview" class="school-logo" />
+      </div>
+      <ng-template #noSchoolLogo>
+        <div class="logo-placeholder">No Logo</div>
+      </ng-template>
+    </div>
+
+    <form [formGroup]="schoolDetailsForm" class="form details-form">
+      <input formControlName="name" placeholder="SCHOOL_NAME" />
+      <input formControlName="website" placeholder="SCHOOL_WEBSITE" />
+      <input formControlName="phone" placeholder="SCHOOL_PHONE (e.g. 9771782335, 9931482335)" />
+      <input formControlName="logo_url" placeholder="SCHOOL_LOGO URL or storage path" />
+      <input formControlName="watermark_text" placeholder="SCHOOL_WATERMARK_TEXT" />
+      <input formControlName="watermark_logo_url" placeholder="SCHOOL_WATERMARK_LOGO URL or storage path" />
+      <input formControlName="registration_number" placeholder="SCHOOL_REGISTRATION_NUMBER" />
+      <input formControlName="udise_code" placeholder="SCHOOL_UDISE_CODE" />
+      <textarea formControlName="address" placeholder="SCHOOL_ADDRESS" rows="3"></textarea>
+    </form>
+
+    <div class="upload-card upload-card--inline">
+      <h4>School Logo</h4>
+      <input type="file" accept="image/png,image/jpeg,image/webp" (change)="onSchoolLogoSelected($event)" />
+      <p class="muted" *ngIf="selectedSchoolLogoFile() as file">{{ file.name }}</p>
+      <div class="upload-actions">
+        <button type="button" class="danger" *ngIf="selectedSchoolLogoFile()" (click)="clearSchoolLogoFile()">Clear Logo File</button>
+      </div>
+    </div>
+
+    <div class="summary-grid" *ngIf="schoolDetails() as school">
+      <p><span>Name:</span> {{ school.name || '-' }}</p>
+      <p><span>Website:</span> {{ school.website || '-' }}</p>
+      <p><span>Phone:</span> {{ school.phone || '-' }}</p>
+      <p><span>Watermark Text:</span> {{ school.watermark_text || '-' }}</p>
+      <p><span>Watermark Logo:</span> {{ school.watermark_logo_url || '-' }}</p>
+      <p><span>Registration No:</span> {{ school.registration_number || '-' }}</p>
+      <p><span>UDISE Code:</span> {{ school.udise_code || '-' }}</p>
+      <p><span>Logo:</span> {{ school.logo_url || '-' }}</p>
+    </div>
+    <div class="school-format" *ngIf="schoolDetails() as school">
+      <h4>Uploaded School Format</h4>
+      <div class="school-format__grid">
+        <p><span>SCHOOL_NAME: </span><strong>{{ school.name || '-' }}</strong></p>
+        <p><span>SCHOOL_WEBSITE: </span><strong>{{ school.website || '-' }}</strong></p>
+        <p><span>SCHOOL_PHONE: </span><strong>{{ school.phone || '-' }}</strong></p>
+        <p><span>SCHOOL_LOGO: </span><strong>{{ school.logo_url || '-' }}</strong></p>
+        <p><span>SCHOOL_WATERMARK_TEXT: </span><strong>{{ school.watermark_text || '-' }}</strong></p>
+        <p><span>SCHOOL_WATERMARK_LOGO: </span><strong>{{ school.watermark_logo_url || '-' }}</strong></p>
+        <p><span>SCHOOL_ADDRESS: </span><strong>{{ school.address || '-' }}</strong></p>
+        <p><span>SCHOOL_REGISTRATION_NUMBER: </span><strong>{{ school.registration_number || '-' }}</strong></p>
+        <p><span>SCHOOL_UDISE_CODE: </span><strong>{{ school.udise_code || '-' }}</strong></p>
+      </div>
+    </div>
+
+    <button type="button" (click)="saveSchoolDetails()" [disabled]="savingDetails()">
+      {{ savingDetails() ? 'Saving...' : 'Save School Details' }}
+    </button>
+  </article>
+</section>
+
+
+
+

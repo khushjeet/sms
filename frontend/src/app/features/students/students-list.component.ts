@@ -1,11 +1,14 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { NgIf, NgFor } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { forkJoin } from 'rxjs';
+import { ClassesService } from '../../core/services/classes.service';
+import { SectionsService } from '../../core/services/sections.service';
 import { StudentsService } from '../../core/services/students.service';
+import { ClassModel } from '../../models/class';
+import { Section } from '../../models/section';
 import { Student } from '../../models/student';
-import { environment } from '../../../environments/environment';
-import { downloadStudentPdfFile, SchoolPrintDetails } from './student-pdf-template';
 
 @Component({
   selector: 'app-students-list',
@@ -16,30 +19,42 @@ import { downloadStudentPdfFile, SchoolPrintDetails } from './student-pdf-templa
 })
 export class StudentsListComponent {
   private readonly studentsService = inject(StudentsService);
+  private readonly classesService = inject(ClassesService);
+  private readonly sectionsService = inject(SectionsService);
   private readonly fb = inject(FormBuilder);
-  private readonly printDateFormatter = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' });
-  private readonly apiOrigin = new URL(environment.apiBaseUrl).origin;
-  private readonly schoolDetails: SchoolPrintDetails = {
-    name: 'INDIAN PUBLIC SCHOOL',
-    address: 'Naugawa Chowk, Yogapatti - 845452',
-    phone: '9771782335, 9931482335',
-    email: 'info@ipsyogapatti.com',
-    website: 'https://ipsyogapatti.com',
-    logoUrl: `http://127.0.0.1:8000/storage/assets/ips.png`
-  };
 
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly downloadingStudentId = signal<number | null>(null);
   readonly students = signal<Student[]>([]);
+  readonly classes = signal<ClassModel[]>([]);
+  readonly sections = signal<Section[]>([]);
   readonly pagination = signal({ current_page: 1, last_page: 1, total: 0 });
+  readonly pageSizeOptions = [15, 25, 30, 50];
 
   readonly filters = this.fb.nonNullable.group({
     search: [''],
-    status: ['']
+    status: [''],
+    class_id: [''],
+    section_id: [''],
+    per_page: [15]
+  });
+
+  readonly filteredSections = computed(() => {
+    const classId = Number(this.filters.controls.class_id.value || 0);
+
+    return this.sections().filter((section) => !classId || Number(section.class_id) === classId);
   });
 
   ngOnInit() {
+    this.loadFilterOptions();
+    this.filters.controls.class_id.valueChanges.subscribe(() => {
+      this.filters.patchValue({ section_id: '' }, { emitEvent: false });
+      this.applyFilters();
+    });
+    this.filters.controls.status.valueChanges.subscribe(() => this.applyFilters());
+    this.filters.controls.section_id.valueChanges.subscribe(() => this.applyFilters());
+    this.filters.controls.per_page.valueChanges.subscribe(() => this.applyFilters());
     this.load();
   }
 
@@ -47,9 +62,16 @@ export class StudentsListComponent {
     this.loading.set(true);
     this.error.set(null);
 
-    const { search, status } = this.filters.getRawValue();
+    const { search, status, class_id, section_id, per_page } = this.filters.getRawValue();
     this.studentsService
-      .list({ search: search || undefined, status: status || undefined, page })
+      .list({
+        search: search || undefined,
+        status: status || undefined,
+        class_id: class_id ? Number(class_id) : undefined,
+        section_id: section_id ? Number(section_id) : undefined,
+        per_page: Number(per_page) || 15,
+        page
+      })
       .subscribe({
         next: (response) => {
           this.students.set(response.data);
@@ -93,30 +115,35 @@ export class StudentsListComponent {
 
   getStudentClass(student: Student): string {
     const typedClass = (student as any)?.currentEnrollment?.section?.class?.name
+      || (student as any)?.latestEnrollment?.section?.class?.name
       || (student as any)?.profile?.class?.name;
     const snakeClass = (student as any)?.current_enrollment?.section?.class?.name
+      || (student as any)?.latest_enrollment?.section?.class?.name
       || (student as any)?.profile?.class?.name;
     return typedClass || snakeClass || '-';
   }
 
+  getStudentSection(student: Student): string {
+    const typedSection = (student as any)?.currentEnrollment?.section?.name;
+    const typedLatestSection = (student as any)?.latestEnrollment?.section?.name;
+    const snakeSection = (student as any)?.current_enrollment?.section?.name;
+    const snakeLatestSection = (student as any)?.latest_enrollment?.section?.name;
+
+    return typedSection || typedLatestSection || snakeSection || snakeLatestSection || '-';
+  }
+
   downloadStudentPdf(student: Student) {
+    if (this.downloadingStudentId() === student.id) {
+      return;
+    }
+
     this.error.set(null);
     this.downloadingStudentId.set(student.id);
 
-    this.studentsService.getById(student.id).subscribe({
-      next: async (fullStudent) => {
-        try {
-          await downloadStudentPdfFile({
-            student: fullStudent,
-            school: this.schoolDetails,
-            generatedOn: this.printDateFormatter.format(new Date()),
-            avatarUrl: this.avatarUrl(fullStudent)
-          });
-        } catch {
-          this.error.set('Unable to render student image in PDF.');
-        } finally {
-          this.downloadingStudentId.set(null);
-        }
+    this.studentsService.downloadPdf(student.id).subscribe({
+      next: (blob) => {
+        this.saveBlob(blob, `student-${(student.admission_number || student.id).toString().replace(/\s+/g, '-')}.pdf`);
+        this.downloadingStudentId.set(null);
       },
       error: (err) => {
         this.downloadingStudentId.set(null);
@@ -125,14 +152,27 @@ export class StudentsListComponent {
     });
   }
 
-  private avatarUrl(student: Student): string | null {
-    const avatar = student.avatar_url || student.profile?.avatar_url || student.user?.avatar;
-    if (!avatar) {
-      return null;
-    }
-    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
-      return avatar;
-    }
-    return `${this.apiOrigin}/storage/${avatar.replace(/^\/+/, '')}`;
+  private saveBlob(blob: Blob, filename: string): void {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  private loadFilterOptions(): void {
+    forkJoin({
+      classes: this.classesService.list({ status: 'active', per_page: 250 }),
+      sections: this.sectionsService.list({ status: 'active', per_page: 400 })
+    }).subscribe({
+      next: ({ classes, sections }) => {
+        this.classes.set(classes.data || []);
+        this.sections.set(sections.data || []);
+      },
+      error: () => {
+        this.error.set('Unable to load class and section filters.');
+      }
+    });
   }
 }

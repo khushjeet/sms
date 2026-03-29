@@ -103,6 +103,11 @@ class Enrollment extends Model
         return $this->hasMany(AdmitCard::class, 'enrollment_id');
     }
 
+    public function eventParticipants(): HasMany
+    {
+        return $this->hasMany(SchoolEventParticipant::class, 'enrollment_id');
+    }
+
     public function teacherMarks(): HasMany
     {
         return $this->hasMany(TeacherMark::class, 'enrollment_id');

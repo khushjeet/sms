@@ -6,20 +6,46 @@
       <p class="login__sub">Use your authorized account to access SMS modules.</p>
     </div>
 
-    <form [formGroup]="form" (ngSubmit)="submit()" class="login__form">
+    <form [formGroup]="form" (ngSubmit)="submit()" class="login__form" *ngIf="!resetMode()">
       <label>
         <span>Email</span>
         <input type="email" formControlName="email" placeholder="you@school.com" />
       </label>
       <label>
         <span>Password</span>
-        <input type="password" formControlName="password" placeholder="••••••••" />
+        <input type="password" formControlName="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" />
       </label>
 
       <p class="login__error" *ngIf="error()">{{ error() }}</p>
 
       <button type="submit" [disabled]="loading()">
         {{ loading() ? 'Signing in...' : 'Sign in' }}
+      </button>
+
+      <button type="button" class="login__link" (click)="toggleResetMode()">
+        Forgot password?
+      </button>
+    </form>
+
+    <form [formGroup]="resetForm" (ngSubmit)="sendResetLink()" class="login__form" *ngIf="resetMode()">
+      <div class="login__note">
+        Enter your active staff or admin email address. We will send a reset link if the account is eligible.
+      </div>
+
+      <label>
+        <span>Email</span>
+        <input type="email" formControlName="email" placeholder="support@school.com" />
+      </label>
+
+      <p class="login__error" *ngIf="resetError()">{{ resetError() }}</p>
+      <p class="login__success" *ngIf="resetSuccess()">{{ resetSuccess() }}</p>
+
+      <button type="submit" [disabled]="resetLoading()">
+        {{ resetLoading() ? 'Sending...' : 'Send reset link' }}
+      </button>
+
+      <button type="button" class="login__link" (click)="toggleResetMode()">
+        Back to sign in
       </button>
     </form>
   </div>
@@ -32,6 +58,7 @@
         <li>Token-based auth (Sanctum)</li>
         <li>Role-aware navigation</li>
         <li>Immutable audit logging</li>
+        <li>Password reset for eligible active staff and admin accounts</li>
       </ul>
     </div>
   </div>

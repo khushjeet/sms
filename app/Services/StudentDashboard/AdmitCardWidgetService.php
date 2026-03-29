@@ -76,7 +76,7 @@ class AdmitCardWidgetService
             return [
                 'status' => 'published',
                 'exam_name' => $admit->examSession?->name,
-                'download_url' => "/api/v1/admits/{$admit->id}/paper",
+                'download_url' => route('admit.cards.paper.download', ['admitCardId' => (int) $admit->id], false),
                 'message' => 'Admit card is available for download.',
                 'version' => (int) $admit->version,
                 'admit_card_id' => (int) $admit->id,

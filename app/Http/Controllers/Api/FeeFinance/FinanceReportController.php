@@ -13,18 +13,30 @@ class FinanceReportController extends Controller
 {
     public function due(Request $request)
     {
+        $validated = $request->validate([
+            'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
+            'class_id' => ['nullable', 'integer', 'exists:classes,id'],
+            'section_id' => ['nullable', 'integer', 'exists:sections,id'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+        ]);
+
         $query = Enrollment::with([
             'student.user',
             'academicYear',
             'section.class',
         ])->where('status', 'active');
 
-        if ($request->has('academic_year_id')) {
-            $query->where('academic_year_id', $request->academic_year_id);
+        if (!empty($validated['academic_year_id'])) {
+            $query->where('academic_year_id', (int) $validated['academic_year_id']);
         }
 
-        if ($request->has('section_id')) {
-            $query->where('section_id', $request->section_id);
+        if (!empty($validated['class_id'])) {
+            $query->where('class_id', (int) $validated['class_id']);
+        }
+
+        if (!empty($validated['section_id'])) {
+            $query->where('section_id', (int) $validated['section_id']);
         }
 
         $enrollments = $query->get();
@@ -33,11 +45,21 @@ class FinanceReportController extends Controller
         $ledgerTotals = collect();
 
         if (!empty($enrollmentIds)) {
-            $ledgerTotals = DB::table('student_fee_ledger')
+            $ledgerQuery = DB::table('student_fee_ledger')
                 ->select('enrollment_id')
                 ->selectRaw("SUM(CASE WHEN transaction_type = 'debit' THEN amount ELSE 0 END) as debits")
                 ->selectRaw("SUM(CASE WHEN transaction_type = 'credit' THEN amount ELSE 0 END) as credits")
-                ->whereIn('enrollment_id', $enrollmentIds)
+                ->whereIn('enrollment_id', $enrollmentIds);
+
+            if (!empty($validated['start_date'])) {
+                $ledgerQuery->whereDate('posted_at', '>=', $validated['start_date']);
+            }
+
+            if (!empty($validated['end_date'])) {
+                $ledgerQuery->whereDate('posted_at', '<=', $validated['end_date']);
+            }
+
+            $ledgerTotals = $ledgerQuery
                 ->groupBy('enrollment_id')
                 ->get()
                 ->keyBy('enrollment_id');
@@ -70,14 +92,35 @@ class FinanceReportController extends Controller
 
     public function collection(Request $request)
     {
+        $validated = $request->validate([
+            'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
+            'class_id' => ['nullable', 'integer', 'exists:classes,id'],
+            'section_id' => ['nullable', 'integer', 'exists:sections,id'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+        ]);
+
         $ledgerQuery = DB::table('student_fee_ledger')
+            ->join('enrollments', 'enrollments.id', '=', 'student_fee_ledger.enrollment_id')
             ->whereIn('reference_type', ['payment', 'refund', 'receipt']);
 
-        if ($request->has('start_date')) {
-            $ledgerQuery->whereDate('posted_at', '>=', $request->start_date);
+        if (!empty($validated['academic_year_id'])) {
+            $ledgerQuery->where('enrollments.academic_year_id', (int) $validated['academic_year_id']);
         }
-        if ($request->has('end_date')) {
-            $ledgerQuery->whereDate('posted_at', '<=', $request->end_date);
+
+        if (!empty($validated['class_id'])) {
+            $ledgerQuery->where('enrollments.class_id', (int) $validated['class_id']);
+        }
+
+        if (!empty($validated['section_id'])) {
+            $ledgerQuery->where('enrollments.section_id', (int) $validated['section_id']);
+        }
+
+        if (!empty($validated['start_date'])) {
+            $ledgerQuery->whereDate('posted_at', '>=', $validated['start_date']);
+        }
+        if (!empty($validated['end_date'])) {
+            $ledgerQuery->whereDate('posted_at', '<=', $validated['end_date']);
         }
 
         $ledgerTotals = $ledgerQuery
@@ -88,12 +131,27 @@ class FinanceReportController extends Controller
         $collections = (float) ($ledgerTotals->collections ?? 0);
         $refunds = (float) ($ledgerTotals->refunds ?? 0);
 
-        $paymentsQuery = Payment::query()->where('amount', '>', 0);
-        if ($request->has('start_date')) {
-            $paymentsQuery->whereDate('payment_date', '>=', $request->start_date);
+        $paymentsQuery = Payment::query()
+            ->with('enrollment')
+            ->where('amount', '>', 0);
+
+        if (!empty($validated['academic_year_id'])) {
+            $paymentsQuery->whereHas('enrollment', fn ($query) => $query->where('academic_year_id', (int) $validated['academic_year_id']));
         }
-        if ($request->has('end_date')) {
-            $paymentsQuery->whereDate('payment_date', '<=', $request->end_date);
+
+        if (!empty($validated['class_id'])) {
+            $paymentsQuery->whereHas('enrollment', fn ($query) => $query->where('class_id', (int) $validated['class_id']));
+        }
+
+        if (!empty($validated['section_id'])) {
+            $paymentsQuery->whereHas('enrollment', fn ($query) => $query->where('section_id', (int) $validated['section_id']));
+        }
+
+        if (!empty($validated['start_date'])) {
+            $paymentsQuery->whereDate('payment_date', '>=', $validated['start_date']);
+        }
+        if (!empty($validated['end_date'])) {
+            $paymentsQuery->whereDate('payment_date', '<=', $validated['end_date']);
         }
         $payments = $paymentsQuery->orderBy('payment_date')->get();
 
@@ -114,11 +172,39 @@ class FinanceReportController extends Controller
 
     public function routeWise(Request $request)
     {
-        $query = StudentTransportAssignment::with(['route', 'stop'])
+        $validated = $request->validate([
+            'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
+            'class_id' => ['nullable', 'integer', 'exists:classes,id'],
+            'section_id' => ['nullable', 'integer', 'exists:sections,id'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+        ]);
+
+        $query = StudentTransportAssignment::with(['route', 'stop', 'enrollment'])
             ->where('status', 'active');
 
-        if ($request->has('academic_year_id')) {
-            $query->where('academic_year_id', $request->academic_year_id);
+        if (!empty($validated['academic_year_id'])) {
+            $query->whereHas('enrollment', fn ($enrollmentQuery) => $enrollmentQuery->where('academic_year_id', (int) $validated['academic_year_id']));
+        }
+
+        if (!empty($validated['class_id'])) {
+            $query->whereHas('enrollment', fn ($enrollmentQuery) => $enrollmentQuery->where('class_id', (int) $validated['class_id']));
+        }
+
+        if (!empty($validated['section_id'])) {
+            $query->whereHas('enrollment', fn ($enrollmentQuery) => $enrollmentQuery->where('section_id', (int) $validated['section_id']));
+        }
+
+        if (!empty($validated['start_date'])) {
+            $query->where(function ($assignmentQuery) use ($validated) {
+                $assignmentQuery
+                    ->whereNull('end_date')
+                    ->orWhereDate('end_date', '>=', $validated['start_date']);
+            });
+        }
+
+        if (!empty($validated['end_date'])) {
+            $query->whereDate('start_date', '<=', $validated['end_date']);
         }
 
         $records = $query->get();
@@ -135,6 +221,12 @@ class FinanceReportController extends Controller
                 'route_id' => $route?->id,
                 'route_name' => $route?->route_name,
                 'route_number' => $route?->route_number,
+                'enrollment_ids' => $group->pluck('enrollment_id')
+                    ->filter()
+                    ->map(fn ($id) => (int) $id)
+                    ->unique()
+                    ->values()
+                    ->all(),
                 'student_count' => $count,
                 'fee_amount' => round($avgAmount, 2),
                 'total_amount' => round($totalAmount, 2),

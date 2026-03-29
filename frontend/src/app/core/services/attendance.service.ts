@@ -15,15 +15,15 @@ import {
 export class AttendanceService {
   private readonly api = inject(ApiClient);
 
-  getSectionAttendance(params: { section_id: number; date: string }) {
+  getSectionAttendance(params: { class_id: number; section_id?: number; date: string }) {
     return this.api.get<AttendanceListItem[]>('attendance/section', params);
   }
 
-  markAttendance(payload: { section_id: number; date: string; attendances: AttendanceMarkItem[] }) {
+  markAttendance(payload: { class_id: number; section_id?: number; date: string; attendances: AttendanceMarkItem[] }) {
     return this.api.post<{ message: string }>('attendance/mark', payload);
   }
 
-  lockAttendance(payload: { section_id: number; date: string }) {
+  lockAttendance(payload: { class_id: number; section_id?: number; date: string }) {
     return this.api.post<{ message: string }>('attendance/lock', payload);
   }
 
@@ -31,7 +31,7 @@ export class AttendanceService {
     return this.api.get<AttendanceSummary>(`attendance/student/${studentId}`, params);
   }
 
-  getSectionStatistics(params: { section_id: number; start_date: string; end_date: string }) {
+  getSectionStatistics(params: { class_id: number; section_id?: number; start_date: string; end_date: string }) {
     return this.api.get<unknown[]>('attendance/section/statistics', params);
   }
 

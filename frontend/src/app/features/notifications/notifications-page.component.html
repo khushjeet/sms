@@ -1,0 +1,40 @@
+<section class="notifications-page">
+  <div class="notifications-page__header">
+    <div>
+      <p class="notifications-page__eyebrow">In-App Notifications</p>
+      <h2>Updates that follow your account</h2>
+      <p>Recent alerts stay here even if you miss the bell dropdown.</p>
+    </div>
+    <button type="button" (click)="markAllRead()" [disabled]="busy()">Mark all as read</button>
+  </div>
+
+  <div class="notifications-page__filters">
+    <button type="button" [class.active]="status() === 'all'" (click)="setStatus('all')">All</button>
+    <button type="button" [class.active]="status() === 'unread'" (click)="setStatus('unread')">Unread</button>
+    <button type="button" [class.active]="status() === 'read'" (click)="setStatus('read')">Read</button>
+  </div>
+
+  <p class="notifications-page__error" *ngIf="error()">{{ error() }}</p>
+  <p class="notifications-page__empty" *ngIf="!loading() && !items().length">No notifications found for this filter.</p>
+
+  <article
+    class="notifications-page__card"
+    *ngFor="let item of items()"
+    [class.is-unread]="!item.is_read"
+    [class.priority-important]="item.priority === 'important' || item.priority === 'action_required' || item.priority === 'urgent'"
+    (click)="open(item)"
+  >
+    <div class="notifications-page__card-top">
+      <span class="notifications-page__type">{{ item.type }}</span>
+      <span class="notifications-page__time">{{ item.created_at | date : 'medium' }}</span>
+    </div>
+    <h3>{{ item.title }}</h3>
+    <p>{{ item.message }}</p>
+  </article>
+
+  <div class="notifications-page__pager" *ngIf="pagination().last_page > 1">
+    <button type="button" (click)="previousPage()" [disabled]="pagination().current_page <= 1">Previous</button>
+    <span>Page {{ pagination().current_page }} of {{ pagination().last_page }} · {{ pagination().total }} total</span>
+    <button type="button" (click)="nextPage()" [disabled]="pagination().current_page >= pagination().last_page">Next</button>
+  </div>
+</section>

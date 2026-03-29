@@ -32,6 +32,8 @@ export interface StudentProfileSummary {
   ifsc_code?: string | null;
   permanent_address?: string | null;
   current_address?: string | null;
+  principal_signature_path?: string | null;
+  director_signature_path?: string | null;
   academic_year?: AcademicYear;
   class?: ClassModel;
 }
@@ -47,6 +49,7 @@ export interface Student {
   status: string;
   user: AuthUser;
   currentEnrollment?: EnrollmentSummary | null;
+  latestEnrollment?: EnrollmentSummary | null;
   profile?: StudentProfileSummary | null;
   remarks?: string | null;
   blood_group?: string | null;

@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
 import { NgIf, NgFor, JsonPipe } from '@angular/common';
 import { AttendanceService } from '../../core/services/attendance.service';
@@ -62,10 +62,16 @@ export class AttendanceComponent {
   ];
 
   readonly form = this.fb.nonNullable.group({
-    section_id: ['', Validators.required],
+    class_id: ['', Validators.required],
+    section_id: [''],
     date: ['', Validators.required],
     start_date: [''],
     end_date: ['']
+  });
+
+  readonly filteredSections = computed(() => {
+    const classId = Number(this.form.controls.class_id.value || 0);
+    return this.sections().filter((section) => !classId || Number(section.class_id) === classId);
   });
 
   readonly reportForm = this.fb.nonNullable.group({
@@ -95,6 +101,12 @@ export class AttendanceComponent {
         }
       }
     });
+
+    this.form.controls.class_id.valueChanges.subscribe(() => {
+      this.form.patchValue({ section_id: '' }, { emitEvent: false });
+      this.attendanceList.set([]);
+      this.statistics.set(null);
+    });
   }
 
   loadAttendance() {
@@ -104,10 +116,13 @@ export class AttendanceComponent {
     }
 
     const raw = this.form.getRawValue();
-    const payload = {
-      section_id: Number(raw.section_id),
+    const payload: { class_id: number; section_id?: number; date: string } = {
+      class_id: Number(raw.class_id),
       date: raw.date
     };
+    if (raw.section_id) {
+      payload.section_id = Number(raw.section_id);
+    }
 
     this.error.set(null);
     this.message.set(null);
@@ -123,15 +138,27 @@ export class AttendanceComponent {
 
   markAttendance() {
     const raw = this.form.getRawValue();
-    const payload = {
-      section_id: Number(raw.section_id),
-      date: raw.date,
-      attendances: this.attendanceList().map((item): AttendanceMarkItem => ({
+    const attendances = this.attendanceList()
+      .filter((item) => item.status !== 'not_marked')
+      .map((item): AttendanceMarkItem => ({
         enrollment_id: item.enrollment_id,
         status: item.status as AttendanceMarkItem['status'],
         remarks: item.remarks || undefined
-      }))
+      }));
+
+    if (!attendances.length) {
+      this.error.set('Select at least one attendance status before saving.');
+      return;
+    }
+
+    const payload: { class_id: number; section_id?: number; date: string; attendances: AttendanceMarkItem[] } = {
+      class_id: Number(raw.class_id),
+      date: raw.date,
+      attendances
     };
+    if (raw.section_id) {
+      payload.section_id = Number(raw.section_id);
+    }
 
     this.error.set(null);
     this.message.set(null);
@@ -151,10 +178,13 @@ export class AttendanceComponent {
 
   lockAttendance() {
     const raw = this.form.getRawValue();
-    const payload = {
-      section_id: Number(raw.section_id),
+    const payload: { class_id: number; section_id?: number; date: string } = {
+      class_id: Number(raw.class_id),
       date: raw.date
     };
+    if (raw.section_id) {
+      payload.section_id = Number(raw.section_id);
+    }
     this.error.set(null);
     this.message.set(null);
     this.busyAction.set('lock');
@@ -173,8 +203,8 @@ export class AttendanceComponent {
 
   loadStatistics() {
     const raw = this.form.getRawValue();
-    if (!raw.section_id || !raw.start_date || !raw.end_date) {
-      this.error.set('Select section, start date, and end date for statistics.');
+    if (!raw.class_id || !raw.start_date || !raw.end_date) {
+      this.error.set('Select class, optional section, start date, and end date for statistics.');
       return;
     }
 
@@ -182,11 +212,20 @@ export class AttendanceComponent {
     this.message.set(null);
     this.busyAction.set('stats');
     this.attendanceService
-      .getSectionStatistics({
-        section_id: Number(raw.section_id),
-        start_date: raw.start_date,
-        end_date: raw.end_date
-      })
+      .getSectionStatistics(
+        raw.section_id
+          ? {
+              class_id: Number(raw.class_id),
+              section_id: Number(raw.section_id),
+              start_date: raw.start_date,
+              end_date: raw.end_date
+            }
+          : {
+              class_id: Number(raw.class_id),
+              start_date: raw.start_date,
+              end_date: raw.end_date
+            }
+      )
       .pipe(finalize(() => this.busyAction.set(null)))
       .subscribe({
         next: (data) => this.statistics.set(data),

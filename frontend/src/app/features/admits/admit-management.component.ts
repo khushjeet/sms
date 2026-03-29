@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
+import { AuthService } from '../../core/services/auth.service';
 import { AdmitCardService } from '../../core/services/admit-card.service';
 import { SubjectsService } from '../../core/services/subjects.service';
 import { Subject } from '../../models/subject';
@@ -49,6 +50,7 @@ interface ScheduleSubjectRow {
   styleUrl: './admit-management.component.scss'
 })
 export class AdmitManagementComponent {
+  private readonly auth = inject(AuthService);
   private readonly admitCardService = inject(AdmitCardService);
   private readonly subjectsService = inject(SubjectsService);
   private readonly examConfigurationsService = inject(ExamConfigurationsService);
@@ -78,8 +80,20 @@ export class AdmitManagementComponent {
   readonly loadingSessionCards = signal(false);
   readonly visibilityActionLoading = signal<number | null>(null);
   readonly searchQuery = signal('');
+  readonly myAdmit = signal<{ id: number; status: string; exam_name: string | null; version: number; published_at: string | null; download_url: string | null } | null>(null);
+  readonly myAdmitState = signal<'not_generated' | 'generated_not_published' | 'published' | 'blocked' | null>(null);
+  readonly myAdmitLoading = signal(false);
+
+  isStudent(): boolean {
+    return this.auth.user()?.role === 'student';
+  }
 
   ngOnInit() {
+    if (this.isStudent()) {
+      this.loadMyAdmit();
+      return;
+    }
+
     this.loadFilters();
   }
 
@@ -346,6 +360,29 @@ export class AdmitManagementComponent {
     return this.visibilityActionLoading() === cardId;
   }
 
+  downloadMyAdmit() {
+    const card = this.myAdmit();
+    if (!card?.id && !card?.download_url) {
+      this.error.set('No published admit card found.');
+      return;
+    }
+
+    this.error.set(null);
+    this.message.set(null);
+    this.bulkLoading.set(true);
+
+    const request$ = card.download_url
+      ? this.admitCardService.downloadPaperByUrl(card.download_url)
+      : this.admitCardService.downloadPaper(card.id);
+
+    request$
+      .pipe(finalize(() => this.bulkLoading.set(false)))
+      .subscribe({
+        next: (blob: Blob) => this.saveBlob(blob, `admit-${card.id || 'card'}.pdf`),
+        error: (err: any) => this.error.set(err?.error?.message || 'Unable to download admit card.'),
+      });
+  }
+
   refresh() {
     this.loadFilters();
   }
@@ -529,6 +566,28 @@ export class AdmitManagementComponent {
           }
 
           this.load();
+        },
+      });
+  }
+
+  private loadMyAdmit() {
+    this.myAdmitLoading.set(true);
+    this.error.set(null);
+    this.message.set(null);
+
+    this.admitCardService
+      .myLatest()
+      .pipe(finalize(() => this.myAdmitLoading.set(false)))
+      .subscribe({
+        next: (response) => {
+          this.myAdmitState.set(response.state);
+          this.myAdmit.set(response.admit_card);
+          this.message.set(response.message || null);
+        },
+        error: (err: any) => {
+          this.error.set(err?.error?.message || 'Unable to load admit card.');
+          this.myAdmitState.set(null);
+          this.myAdmit.set(null);
         },
       });
   }

@@ -38,13 +38,14 @@ export interface SubjectTeacherAssignment {
   id: number;
   subject_id: number;
   teacher_id: number;
-  section_id: number;
+  class_id: number;
+  section_id?: number | null;
   academic_year_id: number;
   academic_year_exam_config_id?: number | null;
   academic_year_exam_config_name?: string | null;
   teacher_name: string;
   teacher_email?: string | null;
-  section_name: string;
+  section_name?: string | null;
   class_name: string;
   academic_year_name: string;
   created_at?: string;

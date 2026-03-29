@@ -11,7 +11,7 @@
     <select [ngModel]="assignmentId()" (ngModelChange)="onAssignmentChange($event)">
       <option value="">Select allotted subject</option>
       <option *ngFor="let assignment of assignments()" [value]="assignment.id">
-        {{ assignment.class_name }} - {{ assignment.section_name }} - {{ assignment.subject_name }} - {{ assignment.mapped_exam_configuration_name || 'Exam Not Mapped' }}
+        {{ assignment.class_name }} - {{ assignment.section_name || 'All Sections' }} - {{ assignment.subject_name }} - {{ assignment.mapped_exam_configuration_name || 'Exam Not Mapped' }}
       </option>
     </select>
     <input type="date" [ngModel]="markedOn()" (ngModelChange)="markedOn.set($event)" />
@@ -19,14 +19,14 @@
     <button type="button" (click)="save()" [disabled]="saving() || loading()">{{ saving() ? 'Saving...' : 'Save Marks' }}</button>
   </div>
 
-  <p *ngIf="selectedAssignment() as selected">
-    Subject: <strong>{{ selected.subject_name }}</strong> |
-    Class: <strong>{{ selected.class_name }}</strong> |
-    Section: <strong>{{ selected.section_name }}</strong> |
-    Academic Year: <strong>{{ selected.academic_year_name }}</strong> |
-    Exam: <strong>{{ selected.mapped_exam_configuration_name || 'Not Mapped' }}</strong> |
-    Default Max: <strong>{{ selected.mapped_max_marks ?? 100 }}</strong>
-  </p>
+  <div class="selection-summary" *ngIf="selectedAssignment() as selected">
+    <p><span>Subject:</span> <strong>{{ selected.subject_name }}</strong></p>
+    <p><span>Class:</span> <strong>{{ selected.class_name }}</strong></p>
+    <p><span>Section:</span> <strong>{{ selected.section_name || 'All Sections' }}</strong></p>
+    <p><span>Academic Year:</span> <strong>{{ selected.academic_year_name }}</strong></p>
+    <p><span>Exam:</span> <strong>{{ selected.mapped_exam_configuration_name || 'Not Mapped' }}</strong></p>
+    <p><span>Default Max:</span> <strong>{{ selected.mapped_max_marks ?? 100 }}</strong></p>
+  </div>
 
   <div class="table" *ngIf="rows().length > 0">
     <div class="table__row table__row--head">

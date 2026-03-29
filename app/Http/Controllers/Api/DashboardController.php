@@ -22,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use App\Services\InAppNotificationService;
 
 class DashboardController extends Controller
 {
@@ -315,6 +316,14 @@ class DashboardController extends Controller
                 ],
             ];
         });
+
+        if ($user && $user->hasRole('teacher')) {
+            app(InAppNotificationService::class)->notifySelfAttendanceMarked(
+                $user,
+                (string) $validated['punch_type'],
+                (string) ($payload['event']['punched_at'] ?? now()->toDateTimeString())
+            );
+        }
 
         return response()->json($payload, 201);
     }

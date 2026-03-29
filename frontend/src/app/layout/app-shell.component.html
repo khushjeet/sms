@@ -3,29 +3,71 @@
     <div class="shell__brand">
       <div class="shell__logo">SMS</div>
       <div>
-        <h3>Welcome</h3>
+        <h3>Indian Public School</h3>
         <p>{{ user()?.full_name }}</p>
       </div>
     </div>
 
     <nav class="shell__nav">
-      <a
-        *ngFor="let item of visibleItems()"
-        [routerLink]="item.route"
-        routerLinkActive="active"
-      >
-        {{ item.label }}
-      </a>
+      <section class="shell__nav-group" *ngFor="let group of groupedVisibleItems()">
+        <p class="shell__nav-heading">{{ group.label }}</p>
+        <a
+          *ngFor="let item of group.items"
+          [routerLink]="item.route"
+          routerLinkActive="active"
+        >
+          {{ item.label }}
+        </a>
+      </section>
     </nav>
   </aside>
 
   <div class="shell__main">
     <header class="shell__header">
       <div>
-        <h1>School Management System</h1>
-        <p>Role-based access aligned to SRS v1.3</p>
+        <h1>Indian Public School</h1>
+        <p>Academics, finance, portal, and operations in one place.</p>
       </div>
       <div class="shell__actions">
+        <div class="shell__shortcut-bar">
+          <a *ngFor="let item of demoShortcuts()" [routerLink]="item.route">{{ item.label }}</a>
+        </div>
+        <div class="shell__notification-wrap">
+          <button type="button" class="shell__notification-button" (click)="toggleNotificationMenu()">
+            <span>Bell</span>
+            <strong *ngIf="unreadCount() > 0">{{ unreadCount() > 99 ? '99+' : unreadCount() }}</strong>
+          </button>
+
+          <div class="shell__notification-panel" *ngIf="notificationMenuOpen()">
+            <div class="shell__notification-panel-header">
+              <div>
+                <h3>Notifications</h3>
+                <p>{{ unreadCount() }} unread</p>
+              </div>
+              <button type="button" (click)="markAllNotificationsRead()">Mark all read</button>
+            </div>
+
+            <p class="shell__notification-error" *ngIf="notificationError()">{{ notificationError() }}</p>
+
+            <button
+              type="button"
+              class="shell__notification-item"
+              *ngFor="let item of recentNotifications()"
+              [class.is-unread]="!item.is_read"
+              (click)="openNotification(item)"
+            >
+              <span class="shell__notification-meta">{{ item.type }} · {{ item.created_at | date : 'short' }}</span>
+              <strong>{{ item.title }}</strong>
+              <span>{{ item.message }}</span>
+            </button>
+
+            <p class="shell__notification-empty" *ngIf="!recentNotifications().length">No notifications yet.</p>
+
+            <button type="button" class="shell__notification-footer" (click)="openNotificationsPage()">
+              Open full notification page
+            </button>
+          </div>
+        </div>
         <span class="shell__role">{{ user()?.role }}</span>
         <button type="button" (click)="logout()">Logout</button>
       </div>

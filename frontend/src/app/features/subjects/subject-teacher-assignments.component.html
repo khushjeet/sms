@@ -40,12 +40,24 @@
       </label>
 
       <label>
+        Class
+        <select formControlName="class_id" (change)="onClassChange($any($event.target).value)">
+          <option value="">Select class</option>
+          <option *ngFor="let cls of classes()" [value]="cls.id">{{ cls.name }}</option>
+        </select>
+      </label>
+
+      <label *ngIf="hasSectionsForSelection()">
         Section
         <select formControlName="section_id">
           <option value="">Select section</option>
           <option *ngFor="let sec of filteredSections()" [value]="sec.id">{{ sectionLabel(sec) }}</option>
         </select>
       </label>
+
+      <p class="hint" *ngIf="form.controls.class_id.value && !hasSectionsForSelection()">
+        No sections found for the selected class and academic year. You can save without selecting a section.
+      </p>
 
       <label class="teacher-multi">
         Teachers (multiple)
@@ -74,7 +86,7 @@
       </div>
       <div class="table__row" *ngFor="let row of assignments()">
         <span>{{ row.teacher_name }}</span>
-        <span>{{ row.class_name }} - {{ row.section_name }}</span>
+        <span>{{ row.class_name }} - {{ row.section_name || 'No section' }}</span>
         <span>{{ row.academic_year_name }}</span>
         <span>{{ row.academic_year_exam_config_name || ('ID #' + (row.academic_year_exam_config_id || '-')) }}</span>
         <span>

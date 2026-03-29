@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Api\FeeFinance;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\NotifyPaymentRecordedJob;
+use App\Jobs\NotifyStudentLedgerRecordedJob;
 use App\Models\AuditLog;
 use App\Models\Enrollment;
 use App\Models\Payment;
 use App\Models\StudentFeeLedger;
 use App\Models\StudentTransportAssignment;
 use App\Services\Accounting\AccountingService;
+use App\Services\InAppNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
@@ -64,6 +67,11 @@ class PaymentController extends Controller
 
             AuditLog::log('create', $payment, null, $payment->toArray(), 'Payment recorded');
             AuditLog::log('create', $ledger, null, $ledger->toArray(), 'Ledger credit (projection) created from payment');
+
+            DB::afterCommit(function () use ($payment) {
+                NotifyPaymentRecordedJob::dispatch((int) $payment->id);
+                app(InAppNotificationService::class)->notifyPaymentRecorded($payment);
+            });
 
             return response()->json([
                 'message' => 'Payment recorded successfully',
@@ -205,6 +213,18 @@ class PaymentController extends Controller
 
             AuditLog::log('create', $refund, null, $refund->toArray(), 'Refund recorded');
             AuditLog::log('create', $ledger, null, $ledger->toArray(), 'Ledger debit (projection) created from refund');
+
+            DB::afterCommit(function () use ($ledger, $payment, $refund) {
+                NotifyStudentLedgerRecordedJob::dispatch(
+                    (int) $ledger->id,
+                    'Refund processed',
+                    'A refund has been posted to the student account.',
+                    array_values(array_filter([
+                        'Original Receipt No: ' . ($payment->receipt_number ?: '-'),
+                        'Refund Receipt No: ' . ($refund->receipt_number ?: '-'),
+                    ]))
+                );
+            });
 
             return response()->json([
                 'message' => 'Refund processed successfully',

@@ -28,6 +28,10 @@ exit;
 php artisan migrate
 ```
 
+Important:
+
+- `php artisan migrate` now also creates the `user_notifications` table used by the bell badge, recent notifications dropdown, full notifications page, and super admin visibility for teacher attendance activity.
+
 ### Step 3: Start Server
 ```bash
 php artisan serve
@@ -157,6 +161,13 @@ curl -X POST http://localhost:8000/api/v1/enrollments \
 2. Record payment (canonical): `POST /api/v1/finance/payments`
 3. Print receipt: `GET /api/v1/finance/payments/{id}/receipt`
 4. Legacy compatibility endpoint (still supported): `POST /api/v1/finance/receipts`
+
+### In-App Notification Flow
+1. Check unread count: `GET /api/v1/notifications/unread-count`
+2. Load recent items: `GET /api/v1/notifications/recent`
+3. Open paginated list: `GET /api/v1/notifications`
+4. Mark one as read: `POST /api/v1/notifications/{id}/read`
+5. Mark all as read: `POST /api/v1/notifications/mark-all-read`
 
 ### Student Ledger (Clear + Download)
 1. View clear ledger statement:

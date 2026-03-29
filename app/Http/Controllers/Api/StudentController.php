@@ -4,11 +4,15 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ParentModel;
+use App\Models\SchoolSetting;
 use App\Models\Student;
 use App\Models\StudentProfile;
 use App\Models\User;
+use App\Services\Email\EventNotificationService;
+use App\Services\StudentPdfService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -16,26 +20,128 @@ use Illuminate\Validation\Rule;
 class StudentController extends Controller
 {
     /**
+     * Stream school logo for PDF/image consumers (CORS-safe via API middleware).
+     */
+    public function logo()
+    {
+        $path = trim((string) (SchoolSetting::getValue('school_logo_url', config('school.logo_url')) ?? 'storage/assets/ips.png'));
+
+        if ($path === '') {
+            return response()->json(['message' => 'Logo not configured'], 404);
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return redirect()->away($path);
+        }
+
+        $normalized = ltrim(preg_replace('/^public\/storage\//', '', $path), '/');
+        $normalized = preg_replace('/^storage\//', '', $normalized);
+        $normalized = is_string($normalized) ? $normalized : '';
+
+        if ($normalized === '' || !Storage::disk('public')->exists($normalized)) {
+            return response()->json(['message' => 'Logo file not found'], 404);
+        }
+
+        return $this->imageResponse(Storage::disk('public')->path($normalized));
+    }
+
+    /**
      * Display a listing of students
      */
     public function index(Request $request)
     {
-        $query = Student::with([
-            'user',
-            'currentEnrollment.section.class',
-            'currentEnrollment.classModel',
-            'profile.class',
-            'profile.academicYear',
-        ]);
+        $perPage = max(1, min((int) $request->input('per_page', 15), 100));
+
+        $query = Student::query()
+            ->select([
+                'id',
+                'user_id',
+                'admission_number',
+                'admission_date',
+                'date_of_birth',
+                'gender',
+                'status',
+                'avatar_url',
+                'remarks',
+                'blood_group',
+                'address',
+                'city',
+                'state',
+                'pincode',
+                'nationality',
+                'religion',
+                'category',
+                'aadhar_number',
+                'medical_info',
+            ])
+            ->with([
+                'user:id,email,role,first_name,last_name,phone,avatar,status',
+                'currentEnrollment' => function ($query) {
+                    $query->select([
+                        'enrollments.id',
+                        'enrollments.student_id',
+                        'enrollments.class_id',
+                        'enrollments.section_id',
+                        'enrollments.academic_year_id',
+                        'enrollments.status',
+                    ]);
+                },
+                'currentEnrollment.section:id,class_id,name,academic_year_id,status',
+                'currentEnrollment.section.class:id,name,numeric_order',
+                'currentEnrollment.classModel:id,name,numeric_order',
+                'latestEnrollment' => function ($query) {
+                    $query->select([
+                        'enrollments.id',
+                        'enrollments.student_id',
+                        'enrollments.class_id',
+                        'enrollments.section_id',
+                        'enrollments.academic_year_id',
+                        'enrollments.status',
+                        'enrollments.enrollment_date',
+                    ]);
+                },
+                'latestEnrollment.section:id,class_id,name,academic_year_id,status',
+                'latestEnrollment.section.class:id,name,numeric_order',
+                'latestEnrollment.classModel:id,name,numeric_order',
+                'profile:id,student_id,class_id,roll_number,father_name,father_email,father_mobile_number,mother_name,mother_email,mother_mobile_number,class_id',
+                'profile.class:id,name,numeric_order',
+            ]);
 
         // Filters
         if ($request->has('status')) {
             $query->where('status', $request->status);
         }
 
-        if ($request->has('class_id')) {
-            $query->whereHas('currentEnrollment.section', function ($q) use ($request) {
-                $q->where('class_id', $request->class_id);
+        if ($request->filled('class_id')) {
+            $classId = (int) $request->class_id;
+
+            $query->where(function ($builder) use ($classId) {
+                $builder->whereHas('profile', function ($q) use ($classId) {
+                    $q->where('class_id', $classId);
+                })->orWhereHas('currentEnrollment.section', function ($q) use ($classId) {
+                    $q->where('class_id', $classId);
+                })->orWhere(function ($fallback) use ($classId) {
+                    $fallback->whereDoesntHave('profile')
+                        ->whereDoesntHave('currentEnrollment')
+                        ->whereHas('latestEnrollment.section', function ($q) use ($classId) {
+                            $q->where('class_id', $classId);
+                        });
+                });
+            });
+        }
+
+        if ($request->filled('section_id')) {
+            $sectionId = (int) $request->section_id;
+
+            $query->where(function ($builder) use ($sectionId) {
+                $builder->whereHas('currentEnrollment', function ($q) use ($sectionId) {
+                    $q->where('section_id', $sectionId);
+                })->orWhere(function ($fallback) use ($sectionId) {
+                    $fallback->whereDoesntHave('currentEnrollment')
+                        ->whereHas('latestEnrollment', function ($q) use ($sectionId) {
+                            $q->where('section_id', $sectionId);
+                        });
+                });
             });
         }
 
@@ -58,7 +164,7 @@ class StudentController extends Controller
             });
         }
 
-        $students = $query->paginate($request->per_page ?? 15);
+        $students = $query->paginate($perPage);
 
         return response()->json($students);
     }
@@ -91,6 +197,8 @@ public function store(Request $request)
         'aadhar_number' => 'nullable|string|unique:students,aadhar_number',
         'medical_info' => 'nullable',
         'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+        'principal_signature' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+        'director_signature' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         'academic_year_id' => 'nullable|exists:academic_years,id',
         'class_id' => 'nullable|exists:classes,id',
         'roll_number' => 'nullable|string|max:50',
@@ -201,6 +309,12 @@ public function store(Request $request)
             'relation_with_account_holder' => $validated['relation_with_account_holder'] ?? null,
             'permanent_address' => $validated['permanent_address'] ?? null,
             'current_address' => $validated['current_address'] ?? null,
+            'principal_signature_path' => $request->hasFile('principal_signature')
+                ? $request->file('principal_signature')->store('students/signatures/principal', 'public')
+                : null,
+            'director_signature_path' => $request->hasFile('director_signature')
+                ? $request->file('director_signature')->store('students/signatures/director', 'public')
+                : null,
         ]);
 
         $this->createOrAttachParent(
@@ -224,6 +338,13 @@ public function store(Request $request)
         );
 
         DB::commit();
+
+        $student = $student->fresh(['user', 'profile', 'parents.user']);
+        app(EventNotificationService::class)->notifyStudentRegistered(
+            $student,
+            app(StudentPdfService::class)->output($student),
+            app(StudentPdfService::class)->filename($student)
+        );
 
         return response()->json([
             'message' => 'Student enrolled successfully',
@@ -266,7 +387,8 @@ public function store(Request $request)
      */
     public function update(Request $request, $id)
     {
-        $student = Student::findOrFail($id);
+        $student = Student::with(['user', 'profile', 'parents.user'])->findOrFail($id);
+        $beforeSnapshot = $this->studentNotificationSnapshot($student);
 
         $validated = $request->validate([
             'first_name' => 'sometimes|string|max:255',
@@ -282,6 +404,8 @@ public function store(Request $request)
             'medical_info' => 'nullable',
             'remarks' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'principal_signature' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'director_signature' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'caste' => 'nullable|string|max:255',
             'academic_year_id' => 'nullable|exists:academic_years,id',
             'class_id' => 'nullable|exists:classes,id',
@@ -340,6 +464,24 @@ public function store(Request $request)
                 );
             }
 
+            $profile = $student->profile ?: $student->profile()->make(['user_id' => $student->user_id]);
+
+            if ($request->hasFile('principal_signature')) {
+                if ($profile->principal_signature_path) {
+                    Storage::disk('public')->delete($profile->principal_signature_path);
+                }
+                $profile->principal_signature_path = $request->file('principal_signature')
+                    ->store('students/signatures/principal', 'public');
+            }
+
+            if ($request->hasFile('director_signature')) {
+                if ($profile->director_signature_path) {
+                    Storage::disk('public')->delete($profile->director_signature_path);
+                }
+                $profile->director_signature_path = $request->file('director_signature')
+                    ->store('students/signatures/director', 'public');
+            }
+
             // Update student record
             $student->update(array_intersect_key($validated, array_flip([
                 'blood_group', 'address', 'city', 'state', 'pincode', 'medical_info', 'remarks'
@@ -380,11 +522,24 @@ public function store(Request $request)
                 );
             }
 
+            if ($profile->isDirty(['principal_signature_path', 'director_signature_path'])) {
+                $profile->student_id = $student->id;
+                $profile->user_id = $student->user_id;
+                $profile->save();
+            }
+
             DB::commit();
+
+            $student = $student->fresh(['user', 'profile', 'parents.user', 'profile.academicYear', 'profile.class']);
+            $changes = $this->studentNotificationChanges($beforeSnapshot, $student);
+
+            if (!empty($changes)) {
+                app(EventNotificationService::class)->notifyStudentUpdated($student, $changes);
+            }
 
             return response()->json([
                 'message' => 'Student updated successfully',
-                'data' => $student->fresh()->load(['user', 'profile.academicYear', 'profile.class'])
+                'data' => $student
             ]);
 
         } catch (\Exception $e) {
@@ -478,14 +633,30 @@ public function store(Request $request)
         return response()->json($summary);
     }
 
+    public function downloadPdf($id)
+    {
+        $student = Student::findOrFail($id);
+        $pdfService = app(StudentPdfService::class);
+        $student = $pdfService->loadStudent($student);
+        $pdfOutput = $pdfService->output($student);
+        $filename = $pdfService->filename($student);
+
+        app(EventNotificationService::class)->notifyStudentPdfShared($student, $pdfOutput, $filename);
+
+        return response($pdfOutput, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
     /**
      * Stream student's avatar for PDF/image consumers (CORS-safe via API middleware).
      */
     public function avatar($id)
     {
         $student = Student::with(['user', 'profile'])->findOrFail($id);
-        $path = $student->avatar_url
-            ?? $student->profile?->avatar_url
+        $path = $student->profile?->avatar_url
+            ?? $student->avatar_url
             ?? $student->user?->avatar;
 
         if (!$path) {
@@ -496,13 +667,111 @@ public function store(Request $request)
             return redirect()->away($path);
         }
 
-        $normalized = ltrim($path, '/');
+        $normalized = ltrim(preg_replace('/^public\/storage\//', '', $path), '/');
+        $normalized = preg_replace('/^storage\//', '', $normalized);
+        $normalized = is_string($normalized) ? $normalized : '';
+
         if (!Storage::disk('public')->exists($normalized)) {
             return response()->json(['message' => 'Avatar file not found'], 404);
         }
 
-        $absolutePath = Storage::disk('public')->path($normalized);
-        return response()->file($absolutePath);
+        return $this->imageResponse(Storage::disk('public')->path($normalized));
+    }
+
+    private function imageResponse(string $absolutePath)
+    {
+        if (!is_file($absolutePath)) {
+            return response()->json(['message' => 'Image file not found'], 404);
+        }
+
+        $mimeType = File::mimeType($absolutePath) ?: 'application/octet-stream';
+        $headers = [
+            'Content-Type' => $mimeType,
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+            'X-Content-Type-Options' => 'nosniff',
+        ];
+
+        return response()->file($absolutePath, $headers);
+    }
+
+    private function studentNotificationSnapshot(Student $student): array
+    {
+        return [
+            'student_name' => trim((string) ($student->user?->full_name ?? $student->full_name ?? '')),
+            'email' => (string) ($student->user?->email ?? ''),
+            'phone' => (string) ($student->user?->phone ?? ''),
+            'blood_group' => (string) ($student->blood_group ?? ''),
+            'address' => (string) ($student->address ?? ''),
+            'city' => (string) ($student->city ?? ''),
+            'state' => (string) ($student->state ?? ''),
+            'pincode' => (string) ($student->pincode ?? ''),
+            'remarks' => (string) ($student->remarks ?? ''),
+            'roll_number' => (string) ($student->profile?->roll_number ?? ''),
+            'father_name' => (string) ($student->profile?->father_name ?? ''),
+            'father_email' => (string) ($student->profile?->father_email ?? ''),
+            'father_mobile' => (string) ($student->profile?->father_mobile_number ?? $student->profile?->father_mobile ?? ''),
+            'mother_name' => (string) ($student->profile?->mother_name ?? ''),
+            'mother_email' => (string) ($student->profile?->mother_email ?? ''),
+            'mother_mobile' => (string) ($student->profile?->mother_mobile_number ?? $student->profile?->mother_mobile ?? ''),
+            'bank_account_number' => (string) ($student->profile?->bank_account_number ?? ''),
+            'bank_account_holder' => (string) ($student->profile?->bank_account_holder ?? ''),
+            'ifsc_code' => (string) ($student->profile?->ifsc_code ?? ''),
+            'permanent_address' => (string) ($student->profile?->permanent_address ?? ''),
+            'current_address' => (string) ($student->profile?->current_address ?? ''),
+            'principal_signature_uploaded' => !empty($student->profile?->principal_signature_path) ? 'Yes' : 'No',
+            'director_signature_uploaded' => !empty($student->profile?->director_signature_path) ? 'Yes' : 'No',
+        ];
+    }
+
+    private function studentNotificationChanges(array $before, Student $student): array
+    {
+        $after = $this->studentNotificationSnapshot($student);
+        $labels = [
+            'student_name' => 'Student Name',
+            'email' => 'Email',
+            'phone' => 'Phone',
+            'blood_group' => 'Blood Group',
+            'address' => 'Address',
+            'city' => 'City',
+            'state' => 'State',
+            'pincode' => 'Pincode',
+            'remarks' => 'Remarks',
+            'roll_number' => 'Roll Number',
+            'father_name' => 'Father Name',
+            'father_email' => 'Father Email',
+            'father_mobile' => 'Father Mobile',
+            'mother_name' => 'Mother Name',
+            'mother_email' => 'Mother Email',
+            'mother_mobile' => 'Mother Mobile',
+            'bank_account_number' => 'Bank Account Number',
+            'bank_account_holder' => 'Bank Account Holder',
+            'ifsc_code' => 'IFSC Code',
+            'permanent_address' => 'Permanent Address',
+            'current_address' => 'Current Address',
+            'principal_signature_uploaded' => 'Principal Signature',
+            'director_signature_uploaded' => 'Director Signature',
+        ];
+
+        $changes = [];
+        foreach ($labels as $key => $label) {
+            $beforeValue = trim((string) ($before[$key] ?? ''));
+            $afterValue = trim((string) ($after[$key] ?? ''));
+
+            if ($beforeValue === $afterValue) {
+                continue;
+            }
+
+            $changes[] = sprintf(
+                '%s: %s -> %s',
+                $label,
+                $beforeValue !== '' ? $beforeValue : '-',
+                $afterValue !== '' ? $afterValue : '-'
+            );
+        }
+
+        return $changes;
     }
 
     private function createOrAttachParent(
@@ -573,3 +842,7 @@ public function store(Request $request)
         return $value;
     }
 }
+
+
+
+

@@ -73,6 +73,11 @@ class Student extends Model
             ->where('status', 'active');
     }
 
+    public function latestEnrollment(): HasOne
+    {
+        return $this->hasOne(Enrollment::class)->orderByDesc('id');
+    }
+
     public function bookIssues(): HasMany
     {
         return $this->hasMany(BookIssue::class);
@@ -91,6 +96,11 @@ class Student extends Model
     public function admitCards(): HasMany
     {
         return $this->hasMany(AdmitCard::class, 'student_id');
+    }
+
+    public function eventParticipants(): HasMany
+    {
+        return $this->hasMany(SchoolEventParticipant::class, 'student_id');
     }
 
     public function transport()

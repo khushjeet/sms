@@ -5,6 +5,8 @@ import { AcademicYearsService } from '../../core/services/academic-years.service
 import { ClassesService } from '../../core/services/classes.service';
 import { EnrollmentsService } from '../../core/services/enrollments.service';
 import { FinanceService } from '../../core/services/finance.service';
+import { SchoolDetails, SchoolDetailsService } from '../../core/services/school-details.service';
+import { AuditDownloadsService } from '../../core/services/audit-downloads.service';
 import { SectionsService } from '../../core/services/sections.service';
 import { StudentsService } from '../../core/services/students.service';
 import { environment } from '../../../environments/environment';
@@ -65,11 +67,13 @@ export class FinanceComponent {
   private readonly academicYearsService = inject(AcademicYearsService);
   private readonly studentsService = inject(StudentsService);
   private readonly enrollmentsService = inject(EnrollmentsService);
+  private readonly schoolDetailsService = inject(SchoolDetailsService);
+  private readonly auditDownloadsService = inject(AuditDownloadsService);
   private readonly fb = inject(FormBuilder);
-  private readonly schoolLogoUrl = 'http://127.0.0.1:8000/storage/assets/ips.png';
   private readonly apiBase = environment.apiBaseUrl.replace(/\/$/, '');
   private readonly apiOrigin = new URL(environment.apiBaseUrl).origin;
   private readonly apiPath = this.extractPath(environment.apiBaseUrl);
+  private readonly defaultSchoolLogoUrl = `${this.apiOrigin}/storage/assets/ips.png`;
 
   readonly activeTab = signal<FinanceTab>('overview');
   readonly error = signal<string | null>(null);
@@ -84,6 +88,7 @@ export class FinanceComponent {
   readonly students = signal<Student[]>([]);
   readonly selectedStudent = signal<Student | null>(null);
   readonly selectedStudentSummary = signal<StudentFinancialSummary | null>(null);
+  readonly schoolDetails = signal<SchoolDetails | null>(null);
 
   readonly feeHeads = signal<FeeHead[]>([]);
   readonly installments = signal<FeeInstallment[]>([]);
@@ -113,27 +118,57 @@ export class FinanceComponent {
   readonly collectionSummary = signal<CollectionSummary | null>(null);
   readonly collectionPayments = signal<PaymentRecord[]>([]);
   readonly routeWiseRows = signal<RouteWiseReportItem[]>([]);
+  readonly selectedDueReportClassId = signal<number | null>(null);
+  readonly selectedCollectionReportClassId = signal<number | null>(null);
+  readonly selectedRouteWiseClassId = signal<number | null>(null);
 
   readonly studentSearching = signal(false);
   readonly reportsLoading = signal(false);
 
-  readonly selectedEnrollmentId = computed(() => this.selectedStudent()?.currentEnrollment?.id ?? null);
+  readonly selectedEnrollmentId = computed(() => this.getStudentEnrollment(this.selectedStudent())?.id ?? null);
   readonly selectedEnrollment = computed<EnrollmentSummaryView | null>(() => {
-    const enrollment = this.selectedStudent()?.currentEnrollment;
+    const enrollment = this.getStudentEnrollment(this.selectedStudent());
     if (!enrollment) {
       return null;
     }
-    const classId = enrollment.section?.class?.id ?? enrollment.classModel?.id ?? enrollment.class_id ?? null;
-    const className = enrollment.section?.class?.name ?? enrollment.classModel?.name ?? null;
+    const classId = this.getEnrollmentClassId(enrollment);
+    const className = this.getEnrollmentClassName(enrollment);
 
     return {
       id: enrollment.id,
       academic_year_id: enrollment.academic_year_id ?? null,
       class_id: classId,
-      section: enrollment.section?.name ?? null,
+      section: this.getEnrollmentSectionName(enrollment),
       class_name: className,
       status: enrollment.status ?? null
     };
+  });
+
+  readonly dueReportSections = computed(() => {
+    const classId = this.selectedDueReportClassId();
+    if (!classId) {
+      return this.sections();
+    }
+
+    return this.sections().filter((section) => Number(section.class_id) === classId);
+  });
+
+  readonly collectionReportSections = computed(() => {
+    const classId = this.selectedCollectionReportClassId();
+    if (!classId) {
+      return this.sections();
+    }
+
+    return this.sections().filter((section) => Number(section.class_id) === classId);
+  });
+
+  readonly routeWiseSections = computed(() => {
+    const classId = this.selectedRouteWiseClassId();
+    if (!classId) {
+      return this.sections();
+    }
+
+    return this.sections().filter((section) => Number(section.class_id) === classId);
   });
 
   readonly studentSearchForm = this.fb.nonNullable.group({
@@ -241,16 +276,26 @@ export class FinanceComponent {
 
   readonly dueReportForm = this.fb.nonNullable.group({
     academic_year_id: [''],
+    class_id: [''],
+    start_date: [''],
+    end_date: [''],
     section_id: ['']
   });
 
   readonly collectionReportForm = this.fb.nonNullable.group({
+    academic_year_id: [''],
+    class_id: [''],
+    section_id: [''],
     start_date: [''],
     end_date: ['']
   });
 
   readonly routeWiseReportForm = this.fb.nonNullable.group({
-    academic_year_id: ['']
+    academic_year_id: [''],
+    class_id: [''],
+    section_id: [''],
+    start_date: [''],
+    end_date: ['']
   });
 
   readonly transportRouteForm = this.fb.nonNullable.group({
@@ -354,6 +399,7 @@ showError(text: string): void {
   // #region Lifecycle + reactive form events (ngOnInit)
   ngOnInit() {
     // Initial page loads (runs once on component init)
+    this.loadSchoolDetails();
     this.loadReferenceData();
     this.refreshFeeHeads();
     this.refreshInstallments();
@@ -370,6 +416,66 @@ showError(text: string): void {
     this.assignInstallmentFilterForm.controls.academic_year_id.valueChanges.subscribe(() =>
       this.loadInstallmentsForAssignment()
     );
+    this.dueReportForm.controls.class_id.valueChanges.subscribe((value) => {
+      const classId = value ? Number(value) : null;
+      const normalizedClassId = classId && Number.isFinite(classId) ? classId : null;
+      this.selectedDueReportClassId.set(normalizedClassId);
+
+      const currentSectionId = this.dueReportForm.controls.section_id.value;
+      if (!currentSectionId) {
+        return;
+      }
+
+      const sectionStillAllowed = this.sections().some(
+        (section) =>
+          section.id === Number(currentSectionId) &&
+          (!normalizedClassId || Number(section.class_id) === normalizedClassId)
+      );
+
+      if (!sectionStillAllowed) {
+        this.dueReportForm.patchValue({ section_id: '' });
+      }
+    });
+    this.collectionReportForm.controls.class_id.valueChanges.subscribe((value) => {
+      const classId = value ? Number(value) : null;
+      const normalizedClassId = classId && Number.isFinite(classId) ? classId : null;
+      this.selectedCollectionReportClassId.set(normalizedClassId);
+
+      const currentSectionId = this.collectionReportForm.controls.section_id.value;
+      if (!currentSectionId) {
+        return;
+      }
+
+      const sectionStillAllowed = this.sections().some(
+        (section) =>
+          section.id === Number(currentSectionId) &&
+          (!normalizedClassId || Number(section.class_id) === normalizedClassId)
+      );
+
+      if (!sectionStillAllowed) {
+        this.collectionReportForm.patchValue({ section_id: '' });
+      }
+    });
+    this.routeWiseReportForm.controls.class_id.valueChanges.subscribe((value) => {
+      const classId = value ? Number(value) : null;
+      const normalizedClassId = classId && Number.isFinite(classId) ? classId : null;
+      this.selectedRouteWiseClassId.set(normalizedClassId);
+
+      const currentSectionId = this.routeWiseReportForm.controls.section_id.value;
+      if (!currentSectionId) {
+        return;
+      }
+
+      const sectionStillAllowed = this.sections().some(
+        (section) =>
+          section.id === Number(currentSectionId) &&
+          (!normalizedClassId || Number(section.class_id) === normalizedClassId)
+      );
+
+      if (!sectionStillAllowed) {
+        this.routeWiseReportForm.patchValue({ section_id: '' });
+      }
+    });
     this.assignInstallmentForm.controls.fee_installment_id.valueChanges.subscribe((value) => {
       const installmentId = value ? Number(value) : null;
       if (!installmentId) {
@@ -496,19 +602,19 @@ showError(text: string): void {
     this.holdForm.patchValue({ student_id: String(studentId) });
     this.receiptForm.patchValue({ student_id: String(studentId) });
 
-    const currentYearId = student?.currentEnrollment?.academic_year_id;
+    const currentEnrollment = this.getStudentEnrollment(student);
+    const currentYearId = currentEnrollment?.academic_year_id;
     if (currentYearId) {
       this.receiptForm.patchValue({ academic_year_id: String(currentYearId) });
     }
 
-    const enrollmentId = student?.currentEnrollment?.id;
+    const enrollmentId = currentEnrollment?.id;
     if (enrollmentId) {
-      const classId = student?.currentEnrollment?.section?.class?.id;
-      const enrollmentClassId = classId ?? student?.currentEnrollment?.classModel?.id ?? student?.currentEnrollment?.class_id;
+      const enrollmentClassId = this.getEnrollmentClassId(currentEnrollment);
       if (enrollmentClassId) {
         this.bulkAssignInstallmentForm.patchValue({ class_id: String(enrollmentClassId) });
       }
-      const yearId = student?.currentEnrollment?.academic_year_id;
+      const yearId = currentEnrollment?.academic_year_id;
       if (yearId) {
         this.bulkAssignInstallmentForm.patchValue({ academic_year_id: String(yearId) });
       }
@@ -550,6 +656,38 @@ showError(text: string): void {
     this.loadInstallmentsForAssignment();
   }
   // #endregion Template events: Student context (ngSubmit: searchStudents, selectStudent)
+
+  private getStudentEnrollment(student: Student | null): any | null {
+    if (!student) {
+      return null;
+    }
+
+    const typedStudent = student as any;
+    return typedStudent.currentEnrollment ?? typedStudent.current_enrollment ?? null;
+  }
+
+  private getEnrollmentClassId(enrollment: any): number | null {
+    return enrollment?.section?.class?.id
+      ?? enrollment?.section?.class_id
+      ?? enrollment?.classModel?.id
+      ?? enrollment?.class_model?.id
+      ?? enrollment?.class_id
+      ?? null;
+  }
+
+  private getEnrollmentClassName(enrollment: any): string | null {
+    return enrollment?.section?.class?.name
+      ?? enrollment?.section?.class_name
+      ?? enrollment?.classModel?.name
+      ?? enrollment?.class_model?.name
+      ?? null;
+  }
+
+  private getEnrollmentSectionName(enrollment: any): string | null {
+    return enrollment?.section?.name
+      ?? enrollment?.section_name
+      ?? null;
+  }
 
   // #region Template events: Fees & installments (ngSubmit/click)
   /** Template event handler: (click) "Refresh" installments -> reloads installments list. */
@@ -837,7 +975,9 @@ showError(text: string): void {
       .pipe(finalize(() => this.setBusy(key, false)))
       .subscribe({
         next: (blob) => {
-          this.downloadBlob(blob, `student_ledger_${studentId}.csv`);
+          const fileName = `student_ledger_${studentId}.csv`;
+          this.downloadBlob(blob, fileName);
+          this.logFinanceDownload('student_ledger', 'Student Ledger', fileName, this.ledgerEntries().length, params, 'csv', blob);
           this.showSuccess('Student ledger download started.');
         },
         error: (err) => this.showError(err?.error?.message || 'Unable to download student ledger.')
@@ -871,6 +1011,7 @@ showError(text: string): void {
       .subscribe({
         next: (payload) => {
           this.buildStudentLedgerPdf(payload, studentId);
+          this.logFinanceDownload('student_ledger', 'Student Ledger', `student_ledger_${studentId}.pdf`, payload.entries?.length || 0, params, 'pdf');
           this.showSuccess('Student ledger PDF download started.');
         },
         error: (err) => this.showError(err?.error?.message || 'Unable to download student ledger PDF.')
@@ -906,6 +1047,7 @@ showError(text: string): void {
         .subscribe({
           next: (payload) => {
             this.downloadClassLedgerPdf(payload, classId);
+            this.logFinanceDownload('class_ledger', 'Class Ledger', `class_${classId}_ledger.pdf`, payload.statements?.length || 0, params, 'pdf');
             this.showSuccess('Class PDF statements download started.');
           },
           error: (err) => this.showError(err?.error?.message || 'Unable to download class ledger PDF.')
@@ -918,7 +1060,9 @@ showError(text: string): void {
       .pipe(finalize(() => this.setBusy(key, false)))
       .subscribe({
         next: (blob) => {
-          this.downloadBlob(blob, `class_${classId}_ledger.csv`);
+          const fileName = `class_${classId}_ledger.csv`;
+          this.downloadBlob(blob, fileName);
+          this.logFinanceDownload('class_ledger', 'Class Ledger', fileName, 0, params, 'csv', blob);
           this.showSuccess('Class Excel download started.');
         },
         error: (err) => this.showError(err?.error?.message || 'Unable to download class ledger.')
@@ -932,6 +1076,47 @@ showError(text: string): void {
     anchor.download = filename;
     anchor.click();
     window.URL.revokeObjectURL(url);
+  }
+
+  private escapeCsv(value: unknown): string {
+    const text = String(value ?? '');
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+
+  private logFinanceDownload(
+    reportKey: string,
+    reportLabel: string,
+    fileName: string,
+    rowCount: number,
+    filters: Record<string, unknown>,
+    format: 'csv' | 'pdf' = 'csv',
+    blob?: Blob
+  ): void {
+    this.buildChecksum(blob).then((checksum) => {
+      this.auditDownloadsService.logDownload({
+        module: 'fee_reports',
+        report_key: reportKey,
+        report_label: reportLabel,
+        format,
+        file_name: fileName,
+        file_checksum: checksum,
+        row_count: rowCount,
+        filters,
+        context: {
+          active_tab: this.activeTab(),
+        },
+      }).subscribe({ error: () => void 0 });
+    });
+  }
+
+  private async buildChecksum(blob?: Blob): Promise<string | null> {
+    if (!blob || !window.crypto?.subtle) {
+      return null;
+    }
+
+    const buffer = await blob.arrayBuffer();
+    const digest = await window.crypto.subtle.digest('SHA-256', buffer);
+    return Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, '0')).join('');
   }
 
   private downloadClassLedgerPdf(payload: ClassLedgerStatementsResponse, classId: number): void {
@@ -1274,12 +1459,22 @@ showError(text: string): void {
     const rowHeight = 22;
     const footerReserve = 48;
     const maxY = pageHeight - footerReserve;
-    const schoolName = 'INDIAN PUBLIC SCHOOL';
-    const schoolAddress = 'Naugawa Chowk, Yogapatti - 845452';
-    const schoolPhone = '9771782335, 9931482335';
-    const schoolWebsite = 'https://ipsyogapatti.com/';
-    const schoolRegNo = '20310212022111115041';
-    const schoolUdise = '10011101602';
+    let schoolDetails: SchoolDetails | null = null;
+    try {
+      schoolDetails = await firstValueFrom(this.schoolDetailsService.get());
+      this.schoolDetails.set(schoolDetails);
+    } catch {
+      schoolDetails = this.schoolDetails();
+    }
+
+    const schoolName = schoolDetails?.name?.trim() || 'School';
+    const schoolNameLines = this.buildSchoolNameLines(schoolName);
+    const schoolAddress = schoolDetails?.address?.trim() || '';
+    const schoolPhone = schoolDetails?.phone?.trim() || '';
+    const schoolWebsite = schoolDetails?.website?.trim() || '';
+    const schoolRegNo = schoolDetails?.registration_number?.trim() || '';
+    const schoolUdise = schoolDetails?.udise_code?.trim() || '';
+    const schoolLogoUrl = schoolDetails?.logo_data_url?.trim() || this.resolveSchoolLogoUrl(schoolDetails?.logo_url || null);
     const enrollmentId = enrollmentIdRaw;
     const anyStudent = effectiveStudent as any;
     const studentName = this.resolveStudentName(effectiveStudent);
@@ -1306,7 +1501,7 @@ showError(text: string): void {
     const generatedDateLabel = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(
       generatedDate
     );
-    const logoDataUrl = await this.loadImageAsDataUrl('http://127.0.0.1:8000/storage/assets/ips.png');
+    const logoDataUrl = await this.loadImageAsDataUrl(schoolLogoUrl);
 
     let y = 0;
 
@@ -1336,6 +1531,7 @@ showError(text: string): void {
     };
 
     const drawHeader = () => {
+      // Keep receipt/PDF branding fully data-driven from `school_settings`.
       drawWatermark();
 
       y = 36;
@@ -1352,10 +1548,6 @@ showError(text: string): void {
       doc.rect(logoX, logoY, badgeSize, badgeSize);
       if (logoDataUrl) {
         doc.addImage(logoDataUrl, this.detectImageFormat(logoDataUrl), logoX + 2, logoY + 2, badgeSize - 4, badgeSize - 4);
-      } else {
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
-        doc.text('LOGO', logoX + badgeSize / 2, logoY + badgeSize / 2 + 3, { align: 'center' });
       }
 
       const qrSize = badgeSize;
@@ -1365,8 +1557,9 @@ showError(text: string): void {
 
       doc.setFont('times', 'bold');
       doc.setFontSize(24);
-      doc.text('INDIAN PUBLIC', pageWidth / 2, y + 6, { align: 'center' });
-      doc.text('SCHOOL', pageWidth / 2, y + 38, { align: 'center' });
+      schoolNameLines.forEach((line, index) => {
+        doc.text(line, pageWidth / 2, y + 6 + (index * 28), { align: 'center', maxWidth: pageWidth - 220 });
+      });
       y += 46;
 
       doc.setFont('helvetica', 'bold');
@@ -1386,9 +1579,9 @@ showError(text: string): void {
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(18);
-      doc.setTextColor(14, 116, 144);
+      doc.setTextColor('#000000');
       doc.text('Student Details:', marginX, y);
-      doc.setTextColor(15, 23, 42);
+      doc.setTextColor('#000000');
       y += 30;
 
       doc.setFont('helvetica', 'bold');
@@ -1522,6 +1715,37 @@ showError(text: string): void {
         y += 14;
       });
     });
+
+    y += 28;
+    const signatureTop = y;
+    const signatureLineY = signatureTop + 24;
+    const signatureLabelY = signatureLineY + 16;
+    const signatureLeftCenter = marginX + 120;
+    const signatureRightCenter = pageWidth - marginX - 120;
+    const signatureLineWidth = 150;
+
+    if (signatureLabelY > pageHeight - 40) {
+      doc.addPage();
+      drawHeader();
+      y = tableTopStart + 12;
+    }
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.line(
+      signatureLeftCenter - signatureLineWidth / 2,
+      y + 24,
+      signatureLeftCenter + signatureLineWidth / 2,
+      y + 24
+    );
+    doc.line(
+      signatureRightCenter - signatureLineWidth / 2,
+      y + 24,
+      signatureRightCenter + signatureLineWidth / 2,
+      y + 24
+    );
+    doc.text('Principal Signature', signatureLeftCenter, y + 40, { align: 'center' });
+    doc.text('Accountant Signature', signatureRightCenter, y + 40, { align: 'center' });
 
     const fileStamp = new Date().toISOString().slice(0, 10);
     doc.save(`payments_${enrollmentId}_${fileStamp}.pdf`);
@@ -1747,7 +1971,8 @@ showError(text: string): void {
   private preparePaymentReceiptHtmlForPrint(html: string): string {
     let receiptHtml = html;
 
-    const logoMarkup = `<img src="${this.schoolLogoUrl.replace(/"/g, '&quot;')}" alt="Logo" style="width:70px;height:70px;object-fit:contain" />`;
+    const logoUrl = this.resolveSchoolDisplay().logoUrl.replace(/"/g, '&quot;');
+    const logoMarkup = `<img src="${logoUrl}" alt="Logo" style="width:70px;height:70px;object-fit:contain" />`;
     const hasLogoImage = /<div class="logo-box">[\s\S]*?<img\b/i.test(receiptHtml);
     if (!hasLogoImage) {
       receiptHtml = receiptHtml.replace(/<div class="logo-placeholder">LOGO<\/div>/i, logoMarkup);
@@ -1765,7 +1990,7 @@ showError(text: string): void {
   private resolvePaymentFeeHead(payment: PaymentRecord): string {
     const remarks = (payment.remarks || '').trim();
     const matched = remarks.match(/fee\s*head\s*[:\-]\s*([^,;|]+)/i);
-    return matched?.[1]?.trim() || 'Fee Collection';
+    return matched?.[1]?.trim() || 'Fee Paid';
   }
 
   private resolvePaymentInstallment(payment: PaymentRecord): string {
@@ -1777,6 +2002,69 @@ showError(text: string): void {
 
     const paymentDate = (payment.payment_date || '').slice(0, 10) || '-';
     return `${payment.receipt_number || 'Receipt'} | ${paymentDate}`;
+  }
+
+  // Loads school branding/details from the backend `school_settings` table.
+  private loadSchoolDetails(): void {
+    this.schoolDetailsService.get().subscribe({
+      next: (details) => this.schoolDetails.set(details),
+      error: () => this.schoolDetails.set(null)
+    });
+  }
+
+  // All school header fields are sourced from `school_settings` via `school/details`.
+  private resolveSchoolDisplay(school: SchoolDetails | null = this.schoolDetails()): {
+    name: string;
+    address: string;
+    phone: string;
+    website: string;
+    registrationNumber: string;
+    udiseCode: string;
+    logoUrl: string;
+  } {
+    return {
+      name: school?.name?.trim() || 'School',
+      address: school?.address?.trim() || '',
+      phone: school?.phone?.trim() || '',
+      website: school?.website?.trim() || '',
+      registrationNumber: school?.registration_number?.trim() || '',
+      udiseCode: school?.udise_code?.trim() || '',
+      logoUrl: this.resolveSchoolLogoUrl(school?.logo_url || null)
+    };
+  }
+
+  private resolveSchoolLogoUrl(path?: string | null): string {
+    return this.resolveAssetUrl(path) || this.defaultSchoolLogoUrl;
+  }
+
+  private buildSchoolNameLines(name: string): string[] {
+    const normalized = name.trim() || 'School';
+    const words = normalized.split(/\s+/).filter(Boolean);
+
+    if (words.length <= 2) {
+      return [normalized.toUpperCase()];
+    }
+
+    const midpoint = Math.ceil(words.length / 2);
+    return [
+      words.slice(0, midpoint).join(' ').toUpperCase(),
+      words.slice(midpoint).join(' ').toUpperCase()
+    ];
+  }
+
+  private resolveAssetUrl(path?: string | null): string | null {
+    const normalized = (path || '').trim();
+    if (!normalized) {
+      return null;
+    }
+
+    if (normalized.startsWith('http://') || normalized.startsWith('https://') || normalized.startsWith('data:')) {
+      return normalized;
+    }
+
+    const relative = normalized.replace(/^public\//, '').replace(/^\/+/, '');
+    const publicRelative = relative.startsWith('storage/') ? relative : `storage/${relative}`;
+    return `${this.apiOrigin}/${publicRelative}`;
   }
 
   private formatNarrationForPdf(narration: string | null | undefined, maxLength: number): string {
@@ -1795,13 +2083,46 @@ showError(text: string): void {
     return text.slice(0, maxLength);
   }
 
-  private toNumber(value: unknown): number {
+  toNumber(value: unknown): number {
     const num = Number(value);
     return Number.isFinite(num) ? num : 0;
   }
 
-  private formatAmount(value: number): string {
+  formatAmount(value: number): string {
     return value.toFixed(2);
+  }
+
+  formatPaymentDate(value: string | null | undefined): string {
+    const normalized = (value || '').trim();
+    if (!normalized) {
+      return '-';
+    }
+
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) {
+      return normalized;
+    }
+
+    const hasExplicitTime = /t|\s+\d{1,2}:\d{2}/i.test(normalized);
+    return new Intl.DateTimeFormat('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      ...(hasExplicitTime ? { hour: '2-digit', minute: '2-digit', hour12: true } : {})
+    }).format(parsed);
+  }
+
+  formatPaymentMethod(value: string | null | undefined): string {
+    const normalized = (value || '').trim();
+    if (!normalized) {
+      return '-';
+    }
+
+    return normalized
+      .split(/[_\s]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ');
   }
 
   /** Template event handler: (ngSubmit) refundForm -> refunds a payment and refreshes payment history. */
@@ -1931,7 +2252,10 @@ showError(text: string): void {
     const raw = this.dueReportForm.getRawValue();
     const params = {
       academic_year_id: raw.academic_year_id ? Number(raw.academic_year_id) : undefined,
-      section_id: raw.section_id ? Number(raw.section_id) : undefined
+      class_id: raw.class_id ? Number(raw.class_id) : undefined,
+      section_id: raw.section_id ? Number(raw.section_id) : undefined,
+      start_date: raw.start_date || undefined,
+      end_date: raw.end_date || undefined
     };
 
     this.reportsLoading.set(true);
@@ -1947,10 +2271,41 @@ showError(text: string): void {
     });
   }
 
+  downloadDueReportCsv() {
+    const rows = this.dueReportRows();
+    if (!rows.length) {
+      this.showError('Generate due report first.');
+      return;
+    }
+
+    const fileName = `fee_due_report_${new Date().toISOString().slice(0, 10)}.csv`;
+    const csv = [
+      ['Enrollment ID', 'Student', 'Academic Year', 'Class', 'Section', 'Total Debits', 'Total Credits', 'Balance Due'],
+      ...rows.map((row) => [
+        row.enrollment_id,
+        row.student,
+        row.academic_year,
+        row.class,
+        row.section,
+        row.total_debits,
+        row.total_credits,
+        row.balance_due,
+      ]),
+    ].map((line) => line.map((value) => this.escapeCsv(value)).join(',')).join('\n');
+
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    this.downloadBlob(blob, fileName);
+    this.logFinanceDownload('due_report', 'Due Report', fileName, rows.length, this.dueReportForm.getRawValue(), 'csv', blob);
+    this.showSuccess('Due report CSV downloaded.');
+  }
+
   /** Template event handler: (click) "Generate collection report" -> fetches collection summary + payments. */
   runCollectionReport() {
     const raw = this.collectionReportForm.getRawValue();
     const params = {
+      academic_year_id: raw.academic_year_id ? Number(raw.academic_year_id) : undefined,
+      class_id: raw.class_id ? Number(raw.class_id) : undefined,
+      section_id: raw.section_id ? Number(raw.section_id) : undefined,
       start_date: raw.start_date || undefined,
       end_date: raw.end_date || undefined
     };
@@ -1969,11 +2324,52 @@ showError(text: string): void {
     });
   }
 
+  downloadCollectionReportCsv() {
+    const payments = this.collectionPayments();
+    const summary = this.collectionSummary();
+    if (!summary) {
+      this.showError('Generate collection report first.');
+      return;
+    }
+
+    const fileName = `fee_collection_report_${new Date().toISOString().slice(0, 10)}.csv`;
+    const summaryLines = [
+      ['Total Amount', summary.total_amount],
+      ['Refunds', summary.refunds ?? 0],
+      ['Net Amount', summary.net_amount ?? 0],
+      ['Total Count', summary.total_count],
+    ];
+    const paymentLines = [
+      ['Payment ID', 'Enrollment ID', 'Receipt', 'Date', 'Amount', 'Method', 'Remarks'],
+      ...payments.map((payment) => [
+        payment.id,
+        payment.enrollment_id,
+        payment.receipt_number,
+        payment.payment_date,
+        payment.amount,
+        payment.payment_method,
+        payment.remarks ?? '',
+      ]),
+    ];
+    const csv = [...summaryLines, [], ...paymentLines]
+      .map((line) => line.map((value) => this.escapeCsv(value)).join(','))
+      .join('\n');
+
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    this.downloadBlob(blob, fileName);
+    this.logFinanceDownload('collection_report', 'Collection Report', fileName, payments.length, this.collectionReportForm.getRawValue(), 'csv', blob);
+    this.showSuccess('Collection report CSV downloaded.');
+  }
+
   /** Template event handler: (click) "Generate route-wise report" -> fetches transport route-wise report. */
   runRouteWiseReport() {
     const raw = this.routeWiseReportForm.getRawValue();
     const params = {
-      academic_year_id: raw.academic_year_id ? Number(raw.academic_year_id) : undefined
+      academic_year_id: raw.academic_year_id ? Number(raw.academic_year_id) : undefined,
+      class_id: raw.class_id ? Number(raw.class_id) : undefined,
+      section_id: raw.section_id ? Number(raw.section_id) : undefined,
+      start_date: raw.start_date || undefined,
+      end_date: raw.end_date || undefined
     };
 
     this.reportsLoading.set(true);
@@ -1987,6 +2383,33 @@ showError(text: string): void {
         this.error.set(err?.error?.message || 'Unable to generate route-wise report.');
       }
     });
+  }
+
+  downloadRouteWiseReportCsv() {
+    const rows = this.routeWiseRows();
+    if (!rows.length) {
+      this.showError('Generate route-wise report first.');
+      return;
+    }
+
+    const fileName = `transport_route_wise_report_${new Date().toISOString().slice(0, 10)}.csv`;
+    const csv = [
+      ['Route ID', 'Route Name', 'Route Number', 'Enrollment IDs', 'Students', 'Fee / Student', 'Total Amount'],
+      ...rows.map((row) => [
+        row.route_id ?? '',
+        row.route_name ?? '',
+        row.route_number ?? '',
+        (row.enrollment_ids || []).join(', '),
+        row.student_count,
+        row.fee_amount,
+        row.total_amount,
+      ]),
+    ].map((line) => line.map((value) => this.escapeCsv(value)).join(',')).join('\n');
+
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    this.downloadBlob(blob, fileName);
+    this.logFinanceDownload('route_wise_report', 'Route-Wise Report', fileName, rows.length, this.routeWiseReportForm.getRawValue(), 'csv', blob);
+    this.showSuccess('Route-wise report CSV downloaded.');
   }
 
   // #endregion Template events: Reports (click)

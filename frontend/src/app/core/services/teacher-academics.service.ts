@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { ApiClient } from './api-client.service';
-import { TeacherAssignment, TeacherAttendanceRow, TeacherMarksRow } from '../../models/teacher-academic';
+import { TeacherAssignment, TeacherAttendanceRow, TeacherMarksRow, TeacherTimetableResponse } from '../../models/teacher-academic';
 
 @Injectable({
   providedIn: 'root'
@@ -10,6 +10,10 @@ export class TeacherAcademicsService {
 
   listAssignments() {
     return this.api.get<TeacherAssignment[]>('teacher-academics/assignments');
+  }
+
+  getTimetable(params?: { academic_year_id?: number }) {
+    return this.api.get<TeacherTimetableResponse>('teacher-academics/timetable', params);
   }
 
   getAttendanceSheet(params: { assignment_id: number; date: string }) {

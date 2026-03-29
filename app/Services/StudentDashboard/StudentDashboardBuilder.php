@@ -8,6 +8,7 @@ use App\Models\Enrollment;
 use App\Models\Permission;
 use App\Models\Student;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -65,7 +66,7 @@ class StudentDashboardBuilder
             : $this->emptyAdmitCard();
         $timetable = $widgets['timetable']['enabled']
             ? $this->buildTimetable($selectedEnrollment, $selectedYearId)
-            : ['source' => 'permission_denied', 'items' => []];
+            : ['source' => 'permission_denied', 'days' => [], 'slots' => [], 'items' => []];
         $academicHistory = $widgets['academic_history']['enabled']
             ? $this->buildAcademicHistory((int) $student->id)
             : ['source' => 'permission_denied', 'items' => []];
@@ -206,9 +207,36 @@ class StudentDashboardBuilder
 
     private function buildTimetable(?Enrollment $selectedEnrollment, ?int $selectedYearId): array
     {
+        $days = [
+            ['value' => 'monday', 'label' => 'Monday'],
+            ['value' => 'tuesday', 'label' => 'Tuesday'],
+            ['value' => 'wednesday', 'label' => 'Wednesday'],
+            ['value' => 'thursday', 'label' => 'Thursday'],
+            ['value' => 'friday', 'label' => 'Friday'],
+            ['value' => 'saturday', 'label' => 'Saturday'],
+        ];
+
+        $slots = DB::table('time_slots')
+            ->orderBy('slot_order')
+            ->orderBy('start_time')
+            ->get(['id', 'name', 'start_time', 'end_time', 'is_break', 'slot_order'])
+            ->map(fn ($slot) => [
+                'id' => (int) $slot->id,
+                'name' => (string) $slot->name,
+                'start_time' => $slot->start_time,
+                'end_time' => $slot->end_time,
+                'time_range' => substr((string) $slot->start_time, 0, 5) . ' - ' . substr((string) $slot->end_time, 0, 5),
+                'is_break' => (bool) $slot->is_break,
+                'slot_order' => (int) $slot->slot_order,
+            ])
+            ->values()
+            ->all();
+
         if (!$selectedEnrollment?->section_id || !$selectedYearId) {
             return [
                 'source' => 'timetables',
+                'days' => $days,
+                'slots' => $slots,
                 'items' => [],
             ];
         }
@@ -232,21 +260,30 @@ class StudentDashboardBuilder
             ->orderBy('ts.slot_order')
             ->get([
                 't.day_of_week',
+                't.time_slot_id',
                 'ts.name as period_name',
+                'ts.slot_order',
                 'ts.start_time',
                 'ts.end_time',
+                'ts.is_break',
                 's.name as subject_name',
                 'u.first_name',
                 'u.last_name',
+                't.room_number',
             ])
             ->map(function ($row) {
                 $teacherName = trim((string) (($row->first_name ?? '') . ' ' . ($row->last_name ?? '')));
                 return [
+                    'day_key' => (string) $row->day_of_week,
                     'day' => ucfirst((string) $row->day_of_week),
+                    'time_slot_id' => (int) $row->time_slot_id,
                     'period' => $row->period_name,
+                    'time_slot_order' => (int) $row->slot_order,
                     'time' => substr((string) $row->start_time, 0, 5) . ' - ' . substr((string) $row->end_time, 0, 5),
-                    'subject' => $row->subject_name ?? 'Break',
+                    'is_break' => (bool) $row->is_break,
+                    'subject' => $row->subject_name ?? ((bool) $row->is_break ? 'Break' : '-'),
                     'teacher' => $teacherName !== '' ? $teacherName : '-',
+                    'room_number' => $row->room_number,
                 ];
             })
             ->values()
@@ -254,6 +291,8 @@ class StudentDashboardBuilder
 
         return [
             'source' => 'timetables',
+            'days' => $days,
+            'slots' => $slots,
             'items' => $items,
         ];
     }
@@ -321,8 +360,55 @@ class StudentDashboardBuilder
             ->values()
             ->all();
 
+        if (!empty($items)) {
+            return [
+                'source' => 'attendance_monthly_summaries',
+                'items' => $items,
+            ];
+        }
+
+        $rows = DB::table('attendances as a')
+            ->join('enrollments as e', 'e.id', '=', 'a.enrollment_id')
+            ->whereIn('a.enrollment_id', $enrollmentIdsInYear)
+            ->when($selectedYearId, fn ($q) => $q->where('e.academic_year_id', $selectedYearId))
+            ->orderByDesc('a.date')
+            ->get([
+                'a.date',
+                'a.status',
+                'e.roll_number',
+            ]);
+
+        $items = $rows
+            ->groupBy(function ($row) {
+                $month = Carbon::parse((string) $row->date)->format('Y-m');
+                return $month . '|' . (string) ($row->roll_number ?? '');
+            })
+            ->map(function ($group) {
+                $first = $group->first();
+                $present = $group->where('status', 'present')->count();
+                $absent = $group->where('status', 'absent')->count();
+                $leave = $group->where('status', 'leave')->count();
+                $halfDay = $group->where('status', 'half_day')->count();
+                $total = $group->count();
+
+                return [
+                    'month' => Carbon::parse((string) $first->date)->format('Y-m'),
+                    'roll_number' => $first->roll_number,
+                    'present' => $present,
+                    'absent' => $absent,
+                    'leave' => $leave,
+                    'half_day' => $halfDay,
+                    'total' => $total,
+                    'attendance_percentage' => $total > 0 ? round((($present + $halfDay) / $total) * 100, 2) : 0,
+                ];
+            })
+            ->sortByDesc('month')
+            ->take(24)
+            ->values()
+            ->all();
+
         return [
-            'source' => 'attendance_monthly_summaries',
+            'source' => 'attendances',
             'items' => $items,
         ];
     }
@@ -384,6 +470,8 @@ class StudentDashboardBuilder
             'state' => 'not_published',
             'message' => 'Result access is not enabled for your account.',
             'latest_result' => null,
+            'download_url' => null,
+            'download_available' => false,
         ];
     }
 

@@ -1,0 +1,156 @@
+<div class="timetable-admin">
+  <div class="timetable-admin__header">
+    <div>
+      <h2>Timetable</h2>
+      <p>Manage class-section timetable visibility for the student portal using section-scoped schedule rows.</p>
+    </div>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="success()">{{ success() }}</p>
+
+  <div class="card">
+    <h3>Time Slots</h3>
+    <form class="slot-form" [formGroup]="slotForm" (ngSubmit)="saveTimeSlot()">
+      <label>
+        Slot Name
+        <input formControlName="name" placeholder="Period 1" />
+      </label>
+      <label>
+        Start Time
+        <input type="time" formControlName="start_time" />
+      </label>
+      <label>
+        End Time
+        <input type="time" formControlName="end_time" />
+      </label>
+      <label>
+        Order
+        <input type="number" min="1" formControlName="slot_order" />
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" formControlName="is_break" />
+        Break Slot
+      </label>
+      <button type="submit" class="primary" [disabled]="busyAction() !== null">
+        {{ isBusy('slot_save') ? 'Saving...' : 'Add Time Slot' }}
+      </button>
+    </form>
+
+    <div class="table" *ngIf="timeSlots().length; else noSlotsTpl">
+      <div class="table__row table__row--head">
+        <span>Name</span>
+        <span>Time</span>
+        <span>Order</span>
+        <span>Type</span>
+        <span>Action</span>
+      </div>
+      <div class="table__row" *ngFor="let slot of timeSlots(); trackBy: trackBySlot">
+        <span>{{ slot.name }}</span>
+        <span>{{ slot.start_time }} - {{ slot.end_time }}</span>
+        <span>{{ slot.slot_order }}</span>
+        <span>{{ slot.is_break ? 'Break' : 'Teaching' }}</span>
+        <span><button type="button" class="danger" (click)="deleteTimeSlot(slot.id)" [disabled]="busyAction() !== null">Delete</button></span>
+      </div>
+    </div>
+
+    <ng-template #noSlotsTpl>
+      <p>No time slots created yet.</p>
+    </ng-template>
+  </div>
+
+  <div class="card">
+    <h3>Section Timetable</h3>
+    <form class="filter-form" [formGroup]="filterForm">
+      <label>
+        Academic Year
+        <select formControlName="academic_year_id" (change)="onAcademicYearChange($any($event.target).value)">
+          <option value="">Select year</option>
+          <option *ngFor="let year of academicYears()" [value]="year.id">
+            {{ year.name }}{{ year.is_current ? ' (Current)' : '' }}
+          </option>
+        </select>
+      </label>
+      <label>
+        Class
+        <select formControlName="class_id" (change)="onClassChange($any($event.target).value)">
+          <option value="">Select class</option>
+          <option *ngFor="let classItem of classes()" [value]="classItem.id">{{ classItem.name }}</option>
+        </select>
+      </label>
+      <label>
+        Section
+        <select formControlName="section_id">
+          <option value="">Select section</option>
+          <option *ngFor="let section of filteredSections()" [value]="section.id">
+            {{ section.class?.name }} - {{ section.name }}
+          </option>
+        </select>
+      </label>
+      <button type="button" class="primary" (click)="loadSectionTimetable()" [disabled]="busyAction() !== null">
+        {{ isBusy('load') ? 'Loading...' : 'Load Timetable' }}
+      </button>
+      <button type="button" class="primary" (click)="saveTimetable()" [disabled]="busyAction() !== null || !timeSlots().length">
+        {{ isBusy('save') ? 'Saving...' : 'Save Timetable' }}
+      </button>
+      <button type="button" class="primary" (click)="downloadTimetablePdf()" [disabled]="timetablePdfLoading() || !filterForm.controls.section_id.value">
+        {{ timetablePdfLoading() ? 'Preparing PDF...' : 'Download PDF' }}
+      </button>
+    </form>
+
+    <p class="hint" *ngIf="selectedTimetableMeta() as meta">
+      Editing timetable for {{ meta.class_name || 'Class' }} / {{ meta.section_name || 'Section' }}.
+    </p>
+
+    <div class="matrix-wrap" *ngIf="timeSlots().length; else noMatrixSlotsTpl">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>Time Slot</th>
+            <th *ngFor="let day of days; trackBy: trackByDay">{{ day.label }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let slot of timeSlots(); trackBy: trackBySlot">
+            <td class="slot-meta">
+              <strong>{{ slot.name }}</strong>
+              <span>{{ slot.start_time }} - {{ slot.end_time }}</span>
+              <span>{{ slot.is_break ? 'Break' : 'Teaching' }}</span>
+            </td>
+            <td *ngFor="let day of days; trackBy: trackByDay">
+              <div class="cell">
+                <select
+                  [value]="cell(day.value, slot.id).subject_id"
+                  (change)="updateCell(day.value, slot.id, 'subject_id', $any($event.target).value)"
+                >
+                  <option value="">Select subject</option>
+                  <option *ngFor="let subject of subjects()" [value]="subject.id">
+                    {{ subject.name }} ({{ subject.subject_code || subject.code }})
+                  </option>
+                </select>
+
+                <select
+                  [value]="cell(day.value, slot.id).teacher_id"
+                  (change)="updateCell(day.value, slot.id, 'teacher_id', $any($event.target).value)"
+                >
+                  <option value="">Select teacher</option>
+                  <option *ngFor="let teacher of teacherOptions()" [value]="teacher.id">{{ teacher.label }}</option>
+                </select>
+
+                <input
+                  [value]="cell(day.value, slot.id).room_number"
+                  (input)="updateCell(day.value, slot.id, 'room_number', $any($event.target).value)"
+                  placeholder="Room"
+                />
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <ng-template #noMatrixSlotsTpl>
+      <p>Create time slots first to build a timetable matrix.</p>
+    </ng-template>
+  </div>
+</div>

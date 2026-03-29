@@ -189,15 +189,33 @@ export class FinanceService {
     return this.api.getText(`finance/payments/${paymentId}/receipt-html`);
   }
 
-  dueReport(params?: { academic_year_id?: number; section_id?: number }) {
+  dueReport(params?: {
+    academic_year_id?: number;
+    class_id?: number;
+    section_id?: number;
+    start_date?: string;
+    end_date?: string;
+  }) {
     return this.api.get<DueReportResponse>('finance/reports/fees/due', params);
   }
 
-  collectionReport(params?: { start_date?: string; end_date?: string }) {
+  collectionReport(params?: {
+    academic_year_id?: number;
+    class_id?: number;
+    section_id?: number;
+    start_date?: string;
+    end_date?: string;
+  }) {
     return this.api.get<CollectionReportResponse>('finance/reports/fees/collection', params);
   }
 
-  routeWiseReport(params?: { academic_year_id?: number }) {
+  routeWiseReport(params?: {
+    academic_year_id?: number;
+    class_id?: number;
+    section_id?: number;
+    start_date?: string;
+    end_date?: string;
+  }) {
     return this.api.get<RouteWiseReportResponse>('finance/reports/transport/route-wise', params);
   }
 

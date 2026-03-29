@@ -22,6 +22,9 @@ class ResultMarkSnapshot extends Model
         'subject_id',
         'obtained_marks',
         'max_marks',
+        'passing_marks',
+        'subject_name_snapshot',
+        'subject_code_snapshot',
         'grade',
         'teacher_id',
         'snapshot_version',
@@ -31,6 +34,7 @@ class ResultMarkSnapshot extends Model
     protected $casts = [
         'obtained_marks' => 'decimal:2',
         'max_marks' => 'decimal:2',
+        'passing_marks' => 'decimal:2',
         'created_at' => 'datetime',
     ];
 

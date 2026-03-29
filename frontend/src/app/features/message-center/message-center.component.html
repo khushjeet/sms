@@ -1,0 +1,206 @@
+<section class="message-center-page">
+  <div class="message-center-page__header">
+    <div>
+      <h2>Send Message</h2>
+      <p>Write the message in English or Hindi, choose parents, students, or both, and then pick the delivery channel.</p>
+    </div>
+    <div class="message-center-page__summary">
+      <strong>{{ selectedRecipientsCount() }}</strong>
+      <span>student(s) selected</span>
+    </div>
+  </div>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="success()">{{ success() }}</p>
+  <p class="success" *ngIf="birthdayMessage()">{{ birthdayMessage() }}</p>
+  <article class="delivery-alert" *ngIf="emailHealth() as health" [class.delivery-alert--critical]="health.status === 'critical'" [class.delivery-alert--warning]="health.status === 'warning'">
+    <strong>Email Status</strong>
+    <span>{{ health.message }}</span>
+    <span *ngIf="health.queue_pending_count > 0">Pending: {{ health.queue_pending_count }} | Failed: {{ health.queue_failed_count }}</span>
+  </article>
+  <div class="delivery-stats" *ngIf="batchStatus() as stats">
+    <div class="delivery-stats__card">
+      <strong>{{ stats.total_count }}</strong>
+      <span>Total</span>
+    </div>
+    <div class="delivery-stats__card">
+      <strong>{{ stats.queued_count }}</strong>
+      <span>In Queue</span>
+    </div>
+    <div class="delivery-stats__card">
+      <strong>{{ stats.delivered_count }}</strong>
+      <span>Delivered</span>
+    </div>
+    <div class="delivery-stats__card">
+      <strong>{{ stats.failed_count }}</strong>
+      <span>Failed</span>
+    </div>
+  </div>
+
+  <div class="card" *ngIf="!loading(); else loadingTpl">
+    <div class="message-center-page__grid">
+      <div>
+        <form [formGroup]="messageForm" class="message-form">
+          <label>
+            Language
+            <select formControlName="language">
+              <option value="english">English</option>
+              <option value="hindi">Hindi</option>
+            </select>
+          </label>
+          <label>
+            Send To
+            <select formControlName="audience">
+              <option value="parents">Parents</option>
+              <option value="students">Students</option>
+              <option value="both">Both</option>
+            </select>
+          </label>
+          <label>
+            Email Subject
+            <input formControlName="subject" placeholder="School message" />
+          </label>
+          <div class="channel-group">
+            <span class="label-inline">Channel</span>
+            <label class="channel-option" [class.channel-option--disabled]="!emailChannelEnabled()">
+              <input type="radio" formControlName="channel" value="email" [disabled]="!emailChannelEnabled()" />
+              <span>Email {{ emailChannelEnabled() ? '(Enabled)' : '(Disabled)' }}</span>
+            </label>
+            <label class="channel-option channel-option--disabled">
+              <input type="radio" formControlName="channel" value="sms" [disabled]="true" />
+              <span>SMS (Disabled)</span>
+            </label>
+            <label class="channel-option channel-option--disabled">
+              <input type="radio" formControlName="channel" value="whatsapp" [disabled]="true" />
+              <span>WhatsApp (Disabled)</span>
+            </label>
+          </div>
+          <label>
+            Message
+            <textarea formControlName="message" rows="12" placeholder="Write your message in English or Hindi."></textarea>
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" formControlName="schedule_enabled" />
+            Schedule this special email
+          </label>
+          <label *ngIf="messageForm.controls.schedule_enabled.value">
+            Date & Time
+            <input type="datetime-local" formControlName="schedule_at" />
+          </label>
+          <p class="hint">
+            SMS and WhatsApp stay disabled until their credentials are added. Email follows the SMTP credentials configured in Credentials.
+          </p>
+          <button type="button" class="primary" (click)="sendMessage()" [disabled]="sendingMessage() || !selectedRecipientsCount()">
+            {{ sendingMessage() ? 'Sending...' : (messageForm.controls.schedule_enabled.value ? 'Schedule Message' : 'Send Message') }}
+          </button>
+        </form>
+      </div>
+
+      <div>
+        <form [formGroup]="recipientFilterForm" class="recipient-filters" (ngSubmit)="applyRecipientFilters()">
+          <input formControlName="search" placeholder="Search by name, admission no., or enrollment" />
+          <label class="checkbox">
+            <input type="checkbox" [checked]="recipientFilterForm.controls.all_classes.value" (change)="onRecipientClassModeChange($any($event.target).checked)" />
+            All classes
+          </label>
+          <select formControlName="class_id" [disabled]="recipientFilterForm.controls.all_classes.value" (change)="onRecipientClassChange($any($event.target).value)">
+            <option value="">Select class</option>
+            <option *ngFor="let classItem of classes()" [value]="classItem.id">{{ classItem.name }}</option>
+          </select>
+          <select formControlName="section_id" [disabled]="recipientFilterForm.controls.all_classes.value" (change)="applyRecipientFilters()">
+            <option value="">All sections</option>
+            <option *ngFor="let section of filteredSections()" [value]="section.id">
+              {{ section.class?.name || 'Class' }} - {{ section.name }}
+            </option>
+          </select>
+          <select formControlName="per_page" (change)="applyRecipientFilters()">
+            <option value="15">15 / page</option>
+            <option value="25">25 / page</option>
+            <option value="50">50 / page</option>
+          </select>
+          <button type="submit">Filter Students</button>
+        </form>
+
+        <div class="recipient-toolbar">
+          <label class="checkbox">
+            <input type="checkbox" [checked]="allVisibleRecipientsSelected()" (change)="toggleVisibleRecipients($any($event.target).checked)" />
+            Select all on this page
+          </label>
+          <span>{{ recipientPagination().total }} active student(s)</span>
+        </div>
+
+        <div class="recipient-table" *ngIf="!recipientLoading(); else recipientsLoadingTpl">
+          <div class="recipient-table__row recipient-table__row--head">
+            <span>Select</span>
+            <span>Student</span>
+            <span>Class / Section</span>
+            <span>Admission</span>
+            <span>Enrollment</span>
+            <span>Email Summary</span>
+          </div>
+          <div class="recipient-table__row" *ngFor="let student of recipientStudents(); trackBy: trackByStudent">
+            <span><input type="checkbox" [checked]="isRecipientSelected(student.id)" (change)="toggleRecipient(student.id, $any($event.target).checked)" /></span>
+            <span>{{ getStudentName(student) }}</span>
+            <span>{{ getStudentClass(student) }} / {{ getStudentSection(student) }}</span>
+            <span>{{ student.admission_number }}</span>
+            <span>{{ getEnrollmentId(student) }}</span>
+            <span>{{ getRecipientEmailSummary(student) }}</span>
+          </div>
+        </div>
+
+        <ng-template #recipientsLoadingTpl>
+          <p>Loading students...</p>
+        </ng-template>
+
+        <div class="pagination">
+          <button type="button" (click)="previousRecipientPage()">Previous</button>
+          <span>Page {{ recipientPagination().current_page }} of {{ recipientPagination().last_page }}</span>
+          <button type="button" (click)="nextRecipientPage()">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card birthday-box" *ngIf="!loading()">
+    <div class="birthday-box__header">
+      <div>
+        <h3>Birthday Wishes</h3>
+        <p>Save one automatic birthday email template. It will be sent when a student's birthday comes.</p>
+      </div>
+    </div>
+
+    <form [formGroup]="birthdayForm" class="birthday-form">
+      <label class="checkbox">
+        <input type="checkbox" formControlName="enabled" />
+        Enable automatic birthday wish emails
+      </label>
+      <label>
+        Send To
+        <select formControlName="audience">
+          <option value="parents">Parents</option>
+          <option value="students">Students</option>
+          <option value="both">Both</option>
+        </select>
+      </label>
+      <label>
+        Subject
+        <input formControlName="subject" placeholder="Happy Birthday from School" />
+      </label>
+      <label>
+        Send Time
+        <input type="time" formControlName="send_time" />
+      </label>
+      <label class="birthday-form__full">
+        Birthday Wish Message
+        <textarea formControlName="message" rows="6" placeholder="Write the birthday wish email."></textarea>
+      </label>
+      <button type="button" class="primary" (click)="saveBirthdaySettings()" [disabled]="savingBirthday()">
+        {{ savingBirthday() ? 'Saving...' : 'Save Birthday Wish' }}
+      </button>
+    </form>
+  </div>
+
+  <ng-template #loadingTpl>
+    <p>Loading send message options...</p>
+  </ng-template>
+</section>

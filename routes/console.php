@@ -6,6 +6,10 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schedule;
 use Symfony\Component\Process\Process;
 use Carbon\Carbon;
+use App\Models\ScheduledMessage;
+use App\Models\SchoolSetting;
+use App\Models\Student;
+use App\Services\Email\EventNotificationService;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -223,6 +227,57 @@ Artisan::command('ops:restore-drill {--path=storage/app/backups/database}', func
 Schedule::command('ops:backup-db')->dailyAt('02:00');
 Schedule::command('ops:restore-drill')->weeklyOn(0, '03:00');
 
+Artisan::command('ops:test-preflight', function () {
+    $this->info('Test environment preflight');
+
+    $explicitConnection = getenv('TEST_DB_CONNECTION') ?: null;
+    if (is_string($explicitConnection) && $explicitConnection !== '') {
+        $this->line("Explicit test DB connection: {$explicitConnection}");
+    } else {
+        $this->line('Explicit test DB connection: not set');
+    }
+
+    $hasSqlite = extension_loaded('pdo_sqlite');
+    $this->line('pdo_sqlite extension: ' . ($hasSqlite ? 'available' : 'missing'));
+
+    if ($hasSqlite && (!$explicitConnection || $explicitConnection === 'sqlite')) {
+        $this->info('Result: full test suite can use in-memory SQLite on this machine.');
+        return self::SUCCESS;
+    }
+
+    $host = getenv('TEST_DB_HOST') ?: getenv('DB_HOST') ?: '127.0.0.1';
+    $port = getenv('TEST_DB_PORT') ?: getenv('DB_PORT') ?: '3306';
+    $database = getenv('TEST_DB_DATABASE') ?: getenv('TEST_MYSQL_DATABASE') ?: 'sms_test';
+    $username = getenv('TEST_DB_USERNAME') ?: getenv('DB_USERNAME') ?: 'root';
+    $password = getenv('TEST_DB_PASSWORD');
+    if ($password === false) {
+        $password = getenv('DB_PASSWORD') ?: '';
+    }
+
+    $this->line("MySQL fallback target: {$host}:{$port}/{$database}");
+
+    try {
+        $pdo = new PDO(
+            sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $host, $port),
+            $username,
+            $password
+        );
+        $pdo->query('SELECT 1');
+        $this->info('MySQL connectivity: available');
+        $this->line('Result: full test suite can run with MySQL fallback if migrations succeed.');
+        return self::SUCCESS;
+    } catch (Throwable $e) {
+        $this->error('MySQL connectivity: unavailable');
+        $this->line('Result: full feature verification is blocked on this machine.');
+        $this->newLine();
+        $this->line('Fix one of these:');
+        $this->line('1. Enable the pdo_sqlite PHP extension.');
+        $this->line('2. Start a reachable MySQL server and create/use the test schema.');
+        $this->line('3. Set TEST_DB_* variables to a reachable test database.');
+        return self::FAILURE;
+    }
+})->purpose('Check whether this machine can run the full automated test suite');
+
 Artisan::command('rbac:sync-legacy-roles', function () {
     if (!\Illuminate\Support\Facades\Schema::hasTable('users') || !\Illuminate\Support\Facades\Schema::hasTable('roles') || !\Illuminate\Support\Facades\Schema::hasTable('user_roles')) {
         $this->error('RBAC tables are not available. Run migrations first.');
@@ -387,3 +442,103 @@ Artisan::command('attendance:auto-approve-pending', function () {
 })->purpose('Auto-approve pending staff self-attendance sessions after midnight');
 
 Schedule::command('attendance:auto-approve-pending')->dailyAt('00:10');
+
+Artisan::command('message-center:process-scheduled', function () {
+    if (!\Illuminate\Support\Facades\Schema::hasTable('scheduled_messages')) {
+        $this->warn('scheduled_messages table does not exist. Skipping.');
+        return self::SUCCESS;
+    }
+
+    $service = app(EventNotificationService::class);
+    $processed = 0;
+
+    ScheduledMessage::query()
+        ->where('status', 'scheduled')
+        ->where('channel', 'email')
+        ->where('scheduled_for', '<=', now())
+        ->orderBy('scheduled_for')
+        ->get()
+        ->each(function (ScheduledMessage $message) use ($service, &$processed): void {
+            $students = Student::query()
+                ->with(['user', 'profile', 'parents.user'])
+                ->whereIn('id', $message->student_ids ?? [])
+                ->get();
+
+            $stats = $service->sendCustomStudentMessage(
+                $students,
+                (string) $message->audience,
+                (string) ($message->subject ?? ''),
+                (string) $message->message
+            );
+
+            $message->update([
+                'status' => !empty($stats['batch_id']) ? 'sent' : 'failed',
+                'batch_id' => $stats['batch_id'] ?? null,
+                'sent_at' => !empty($stats['batch_id']) ? now() : null,
+            ]);
+
+            $processed++;
+        });
+
+    $this->info("Scheduled messages processed: {$processed}");
+    return self::SUCCESS;
+})->purpose('Dispatch due scheduled message-center emails');
+
+Artisan::command('message-center:send-birthday-wishes', function () {
+    $settings = SchoolSetting::getValues([
+        'birthday_email_enabled',
+        'birthday_email_audience',
+        'birthday_email_subject',
+        'birthday_email_message',
+        'birthday_email_send_time',
+        'birthday_email_last_sent_on',
+    ]);
+
+    if (($settings['birthday_email_enabled'] ?? '0') !== '1') {
+        $this->line('Birthday wishes are disabled.');
+        return self::SUCCESS;
+    }
+
+    $sendTime = $settings['birthday_email_send_time'] ?? '08:00';
+    $today = now()->toDateString();
+    if (($settings['birthday_email_last_sent_on'] ?? null) === $today) {
+        $this->line('Birthday wishes already sent today.');
+        return self::SUCCESS;
+    }
+
+    if (now()->format('H:i') < $sendTime) {
+        $this->line('Birthday wish send time has not arrived yet.');
+        return self::SUCCESS;
+    }
+
+    $students = Student::query()
+        ->with(['user', 'profile', 'parents.user'])
+        ->where('status', 'active')
+        ->whereMonth('date_of_birth', now()->month)
+        ->whereDay('date_of_birth', now()->day)
+        ->get();
+
+    if ($students->isEmpty()) {
+        SchoolSetting::putValue('birthday_email_last_sent_on', $today);
+        $this->line('No student birthdays today.');
+        return self::SUCCESS;
+    }
+
+    $service = app(EventNotificationService::class);
+    $stats = $service->sendCustomStudentMessage(
+        $students,
+        (string) ($settings['birthday_email_audience'] ?? 'parents'),
+        (string) ($settings['birthday_email_subject'] ?? 'Happy Birthday from School'),
+        (string) ($settings['birthday_email_message'] ?? 'Wishing you a very happy birthday and a wonderful year ahead.')
+    );
+
+    if (!empty($stats['batch_id'])) {
+        SchoolSetting::putValue('birthday_email_last_sent_on', $today);
+    }
+
+    $this->info('Birthday wishes dispatched to ' . ($stats['recipient_count'] ?? 0) . ' recipient(s).');
+    return self::SUCCESS;
+})->purpose('Dispatch automatic birthday wish emails for students whose birthday is today');
+
+Schedule::command('message-center:process-scheduled')->everyFiveMinutes();
+Schedule::command('message-center:send-birthday-wishes')->everyFiveMinutes();

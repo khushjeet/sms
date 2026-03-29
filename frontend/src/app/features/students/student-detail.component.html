@@ -19,7 +19,13 @@
     <div class="detail__grid">
       <div class="card">
         <h3>Profile</h3>
-        <img *ngIf="avatarUrl(s) as avatar" [src]="avatar" alt="Student profile" class="profile-image" />
+        <img
+          *ngIf="avatarUrl(s) as avatar"
+          [src]="avatar"
+          alt="Student profile"
+          class="profile-image"
+          (error)="onAvatarError(s)"
+        />
         <p><strong>Email:</strong> {{ s.user.email }}</p>
         <p><strong>Status:</strong> {{ s.status }}</p>
         <p><strong>Gender:</strong> {{ s.gender }}</p>

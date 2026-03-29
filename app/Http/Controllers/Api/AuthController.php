@@ -102,6 +102,8 @@ class AuthController extends Controller
                 'roles' => $roleNames,
                 'first_name' => $user->first_name,
                 'last_name' => $user->last_name,
+                'avatar' => $user->avatar,
+                'avatar_url' => $user->avatar_url,
                 'full_name' => $user->full_name,
                 'status' => $user->status,
             ]

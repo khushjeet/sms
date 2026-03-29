@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { NgFor, NgIf, JsonPipe } from '@angular/common';
+import { NgFor, NgIf } from '@angular/common';
 import { FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
 import { AuthService } from '../../core/services/auth.service';
@@ -11,7 +11,12 @@ import {
   LeaveType,
   PayrollBatch,
   PayrollBatchDetail,
+  PayrollBatchItem,
+  PayrollBatchItemAdjustment,
   PayrollPeriodOption,
+  PayrollSnapshotAttendance,
+  PayrollSnapshotComponent,
+  PayrollSnapshotComputed,
   SalaryTemplate,
   SelfieAttendanceDailyRow
 } from '../../models/hr-payroll';
@@ -19,7 +24,7 @@ import {
 @Component({
   selector: 'app-hr-payroll',
   standalone: true,
-  imports: [NgIf, NgFor, JsonPipe, ReactiveFormsModule],
+  imports: [NgIf, NgFor, ReactiveFormsModule],
   templateUrl: './hr-payroll.component.html',
   styleUrl: './hr-payroll.component.scss'
 })
@@ -558,6 +563,48 @@ export class HrPayrollComponent {
 
   selectBatch(batch: PayrollBatch) {
     this.loadPayrollDetail(batch.id);
+  }
+
+  payrollSnapshotAttendance(item: PayrollBatchItem): PayrollSnapshotAttendance | null {
+    return item.snapshot?.attendance ?? null;
+  }
+
+  payrollSnapshotComputed(item: PayrollBatchItem): PayrollSnapshotComputed | null {
+    return item.snapshot?.computed ?? null;
+  }
+
+  payrollSnapshotComponents(item: PayrollBatchItem): PayrollSnapshotComponent[] {
+    return item.snapshot?.components ?? [];
+  }
+
+  payrollAdjustments(item: PayrollBatchItem): PayrollBatchItemAdjustment[] {
+    return item.adjustments ?? [];
+  }
+
+  formatMoney(value: string | number | null | undefined): string {
+    const amount = typeof value === 'number' ? value : Number(value ?? 0);
+    if (!Number.isFinite(amount)) {
+      return '0.00';
+    }
+
+    return amount.toFixed(2);
+  }
+
+  formatPercent(value: number | null | undefined): string {
+    if (value === null || value === undefined || !Number.isFinite(value)) {
+      return '0.00%';
+    }
+
+    return `${(value * 100).toFixed(2)}%`;
+  }
+
+  adjustmentAmount(value: string | number): string {
+    const amount = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(amount)) {
+      return '0.00';
+    }
+
+    return `${amount > 0 ? '+' : ''}${amount.toFixed(2)}`;
   }
 
   private loadLeaveRequests() {

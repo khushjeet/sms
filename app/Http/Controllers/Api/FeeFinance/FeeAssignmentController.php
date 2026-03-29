@@ -9,6 +9,7 @@ use App\Models\FeeAssignment;
 use App\Models\FeeStructure;
 use App\Models\OptionalService;
 use App\Models\StudentFeeLedger;
+use App\Services\Email\EventNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -96,6 +97,14 @@ class FeeAssignmentController extends Controller
                 'Ledger credit created from discount'
             );
 
+            DB::afterCommit(function () use ($ledger) {
+                app(EventNotificationService::class)->notifyStudentLedgerRecorded(
+                    $ledger->fresh(['enrollment.student.user', 'enrollment.student.profile', 'enrollment.student.parents.user', 'enrollment.section.class', 'enrollment.classModel', 'enrollment.academicYear']),
+                    'Fee discount applied',
+                    'A credit has been added to the student account.'
+                );
+            });
+
             return response()->json([
                 'message' => 'Discount applied successfully',
                 'ledger_entry' => $ledger,
@@ -163,6 +172,14 @@ class FeeAssignmentController extends Controller
 
             AuditLog::log('create', $assignment, null, $assignment->toArray(), 'Fee assignment created');
             AuditLog::log('create', $ledger, null, $ledger->toArray(), 'Ledger debit created from fee assignment');
+
+            DB::afterCommit(function () use ($ledger) {
+                app(EventNotificationService::class)->notifyStudentLedgerRecorded(
+                    $ledger->fresh(['enrollment.student.user', 'enrollment.student.profile', 'enrollment.student.parents.user', 'enrollment.section.class', 'enrollment.classModel', 'enrollment.academicYear']),
+                    'Fee assigned',
+                    'A fee charge has been added to the student account.'
+                );
+            });
 
             return response()->json([
                 'message' => 'Fee assigned successfully',

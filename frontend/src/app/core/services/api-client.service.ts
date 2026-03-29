@@ -37,6 +37,9 @@ export class ApiClient {
     if (path.startsWith('http://') || path.startsWith('https://')) {
       return path;
     }
+    if (path.startsWith('/')) {
+      return new URL(path, this.baseUrl).toString();
+    }
     const trimmed = path.replace(/^\//, '');
     return `${this.baseUrl}/${trimmed}`;
   }

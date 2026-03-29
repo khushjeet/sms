@@ -8,7 +8,8 @@ import { TeacherAssignment, TeacherMarksRow } from '../../models/teacher-academi
   selector: 'app-teacher-assign-marks',
   standalone: true,
   imports: [NgIf, NgFor, FormsModule],
-  templateUrl: './teacher-assign-marks.component.html'
+  templateUrl: './teacher-assign-marks.component.html',
+  styleUrl: './teacher-assign-marks.component.scss'
 })
 export class TeacherAssignMarksComponent {
   private readonly teacherAcademics = inject(TeacherAcademicsService);

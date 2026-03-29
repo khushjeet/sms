@@ -34,6 +34,8 @@ class StudentProfile extends Model
         'relation_with_account_holder',
         'permanent_address',
         'current_address',
+        'principal_signature_path',
+        'director_signature_path',
     ];
 
     public function student(): BelongsTo

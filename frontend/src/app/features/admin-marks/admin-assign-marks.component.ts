@@ -1,17 +1,20 @@
 import { NgFor, NgIf } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { AdminMarksService } from '../../core/services/admin-marks.service';
-import { ClassesService } from '../../core/services/classes.service';
-import { ExamConfigurationsService } from '../../core/services/exam-configurations.service';
-import { SectionsService } from '../../core/services/sections.service';
-import { SubjectsService } from '../../core/services/subjects.service';
-import { AdminMarksRow, AdminMarksScope, AdminMarksTeacherColumn } from '../../models/admin-marks';
+import { AcademicYearsService } from '../../core/services/academic-years.service';
+import { AuditDownloadsService } from '../../core/services/audit-downloads.service';
+import {
+  AdminMarksFiltersResponse,
+  AdminMarksRow,
+  AdminMarksScope,
+  AdminMarksTeacherColumn,
+} from '../../models/admin-marks';
+import { AcademicYear } from '../../models/academic-year';
 import { ClassModel } from '../../models/class';
-import { ExamConfiguration } from '../../models/exam-configuration';
-import { Section } from '../../models/section';
-import { Subject } from '../../models/subject';
+import { ClassesService } from '../../core/services/classes.service';
 
 @Component({
   selector: 'app-admin-assign-marks',
@@ -21,22 +24,22 @@ import { Subject } from '../../models/subject';
   styleUrl: './admin-assign-marks.component.scss'
 })
 export class AdminAssignMarksComponent {
+  private readonly route = inject(ActivatedRoute);
   private readonly classesService = inject(ClassesService);
-  private readonly sectionsService = inject(SectionsService);
-  private readonly subjectsService = inject(SubjectsService);
-  private readonly examConfigurationsService = inject(ExamConfigurationsService);
+  private readonly academicYearsService = inject(AcademicYearsService);
   private readonly adminMarksService = inject(AdminMarksService);
+  private readonly auditDownloadsService = inject(AuditDownloadsService);
 
   readonly classes = signal<ClassModel[]>([]);
-  readonly sections = signal<Section[]>([]);
-  readonly subjects = signal<Subject[]>([]);
+  readonly academicYears = signal<AcademicYear[]>([]);
   readonly teachers = signal<AdminMarksTeacherColumn[]>([]);
   readonly rows = signal<AdminMarksRow[]>([]);
   readonly scope = signal<AdminMarksScope | null>(null);
-  readonly examConfigurations = signal<ExamConfiguration[]>([]);
-  readonly examConfigurationAcademicYearId = signal<number | null>(null);
+  readonly filters = signal<AdminMarksFiltersResponse | null>(null);
+  readonly targetEnrollmentIds = signal<number[]>([]);
 
   readonly classId = signal<string>('');
+  readonly academicYearId = signal<string>('');
   readonly sectionId = signal<string>('');
   readonly subjectId = signal<string>('');
   readonly subjectCode = signal<string>('');
@@ -44,6 +47,7 @@ export class AdminAssignMarksComponent {
   readonly markedOn = signal<string>(new Date().toISOString().slice(0, 10));
 
   readonly loading = signal(false);
+  readonly loadingFilters = signal(false);
   readonly saving = signal(false);
   readonly finalizing = signal(false);
   readonly downloadingPdf = signal(false);
@@ -51,129 +55,173 @@ export class AdminAssignMarksComponent {
   readonly isFinalized = signal(false);
   readonly message = signal<string | null>(null);
   readonly error = signal<string | null>(null);
+  readonly emptyStateMessage = signal<string | null>(null);
 
-  readonly filteredSubjects = computed(() => {
-    const code = this.subjectCode().trim().toLowerCase();
-    if (!code) {
-      return this.subjects();
+  readonly availableSections = computed(() => this.filters()?.sections || []);
+  readonly availableSubjects = computed(() => this.filters()?.subjects || []);
+  readonly examConfigurations = computed(() => this.filters()?.exam_configurations || []);
+  readonly academicYear = computed(() => this.filters()?.academic_year || null);
+  readonly setupMessages = computed(() => {
+    const messages = this.filters()?.messages;
+    if (!messages) {
+      return [];
     }
 
-    return this.subjects().filter((subject) => {
-      const subjectCode = (subject.subject_code || subject.code || '').toLowerCase();
-      return subjectCode.includes(code);
-    });
+    return Object.values(messages).filter((value): value is string => !!value);
   });
 
+  readonly showSectionSelect = computed(() => this.classId() !== '' && this.availableSections().length > 0);
+  readonly showAllSectionsHint = computed(() => !this.sectionId() && this.availableSections().length > 1);
+  readonly hasAcademicYear = computed(() => !!this.academicYear());
+  readonly canPickSubject = computed(() => !!this.classId() && this.hasAcademicYear() && this.availableSubjects().length > 0);
+  readonly canPickDate = computed(() => this.canPickSubject() && !!this.subjectId());
+  readonly canPickExamConfiguration = computed(() => this.canPickDate() && this.examConfigurations().length > 0);
+  readonly canLoadSheet = computed(() => !!this.classId() && !!this.academicYearId() && !!this.subjectId() && !!this.examConfigurationId() && !!this.markedOn());
   readonly canDownload = computed(() => this.isFinalized() && this.rows().length > 0 && !!this.scope());
+
+  private pendingSectionId: string | null = null;
+  private pendingSubjectId: string | null = null;
+  private pendingExamConfigurationId: string | null = null;
+  private pendingMarkedOn: string | null = null;
 
   ngOnInit() {
     this.loading.set(true);
     forkJoin({
       classes: this.classesService.list({ per_page: 200 }),
-      subjects: this.subjectsService.list({ per_page: 200 })
+      academicYears: this.academicYearsService.list({ per_page: 200 }),
     }).subscribe({
-      next: ({ classes, subjects }) => {
+      next: ({ classes, academicYears }) => {
         this.classes.set(classes.data || []);
-        this.subjects.set(subjects.data || []);
+        this.academicYears.set(academicYears.data || []);
+        this.applyQueryParams();
         this.loading.set(false);
       },
       error: (err) => {
         this.loading.set(false);
-        this.error.set(err?.error?.message || 'Unable to load filters.');
+        this.error.set(err?.error?.message || 'Unable to load classes.');
       }
     });
   }
 
-  onClassChange(classIdRaw: string) {
-    this.classId.set(classIdRaw);
-    this.sectionId.set('');
-    this.sections.set([]);
-    this.rows.set([]);
-    this.scope.set(null);
-    this.teachers.set([]);
-    this.isFinalized.set(false);
-    this.examConfigurations.set([]);
-    this.examConfigurationAcademicYearId.set(null);
-    this.examConfigurationId.set('');
+  private applyQueryParams() {
+    const query = this.route.snapshot.queryParamMap;
+    const classId = query.get('class_id') || '';
+    const academicYearId = query.get('academic_year_id') || '';
+    const sectionId = query.get('section_id') || '';
+    const subjectId = query.get('subject_id') || '';
+    const examConfigurationId = query.get('exam_configuration_id') || '';
+    const markedOn = query.get('marked_on') || '';
+    const enrollmentIds = (query.get('enrollment_ids') || '')
+      .split(',')
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isFinite(value) && value > 0);
 
-    const classId = Number(classIdRaw);
-    if (!classId) {
-      return;
+    this.targetEnrollmentIds.set(enrollmentIds);
+    this.academicYearId.set(academicYearId);
+    this.pendingSectionId = sectionId || null;
+    this.pendingSubjectId = subjectId || null;
+    this.pendingExamConfigurationId = examConfigurationId || null;
+    this.pendingMarkedOn = markedOn || null;
+
+    if (markedOn) {
+      this.markedOn.set(markedOn);
     }
 
-    this.sectionsService.list({ class_id: classId, per_page: 200 }).subscribe({
-      next: (response) => this.sections.set(response.data || []),
-      error: (err) => this.error.set(err?.error?.message || 'Unable to load sections.')
-    });
+    if (classId) {
+      this.onClassChange(classId);
+    }
+  }
+
+  onClassChange(classIdRaw: string) {
+    this.classId.set(classIdRaw);
+    this.clearFilterSelections(false);
+    this.resetSheetState();
+
+    this.tryLoadFilters();
+  }
+
+  onAcademicYearChange(academicYearIdRaw: string) {
+    this.academicYearId.set(academicYearIdRaw);
+    this.clearFilterSelections(false);
+    this.resetSheetState();
+    this.tryLoadFilters();
   }
 
   onSectionChange(sectionIdRaw: string) {
     this.sectionId.set(sectionIdRaw);
-    this.rows.set([]);
-    this.scope.set(null);
-    this.teachers.set([]);
-    this.isFinalized.set(false);
-    this.examConfigurations.set([]);
-    this.examConfigurationAcademicYearId.set(null);
+    this.subjectId.set('');
+    this.subjectCode.set('');
     this.examConfigurationId.set('');
-    this.error.set(null);
-    this.message.set(null);
+    this.resetSheetState();
 
-    const sectionId = Number(sectionIdRaw);
-    if (!sectionId) {
+    this.tryLoadFilters();
+  }
+
+  onSubjectChange(subjectIdRaw: string) {
+    this.subjectId.set(subjectIdRaw);
+    this.resetSheetState();
+
+    const selectedSubject = this.availableSubjects().find((item) => item.id === Number(subjectIdRaw));
+    this.subjectCode.set(selectedSubject?.subject_code || selectedSubject?.code || '');
+
+    const preferredExamId = selectedSubject?.academic_year_exam_config_id || null;
+    const selectedStillExists = this.examConfigurations().some((item) => Number(item.id) === Number(this.examConfigurationId()));
+
+    if (preferredExamId && this.examConfigurations().some((item) => item.id === preferredExamId)) {
+      this.examConfigurationId.set(String(preferredExamId));
       return;
     }
 
-    const section = this.sections().find((item) => item.id === sectionId);
-    const academicYearId = Number(section?.academic_year_id || section?.academicYear?.id || 0);
-    if (!academicYearId) {
-      this.sectionsService.getById(sectionId).subscribe({
-        next: (sectionDetail) => {
-          const detailAcademicYearId = Number(sectionDetail?.academic_year_id || sectionDetail?.academicYear?.id || 0);
-          if (!detailAcademicYearId) {
-            this.error.set('Selected section is missing academic year. Please update section mapping.');
-            return;
-          }
-
-          this.loadExamConfigurations(detailAcademicYearId);
-        },
-        error: (err) => {
-          this.error.set(err?.error?.message || 'Unable to resolve section academic year.');
-        }
-      });
-      return;
+    if (!selectedStillExists) {
+      this.examConfigurationId.set(this.examConfigurations().length > 0 ? String(this.examConfigurations()[0].id) : '');
     }
+  }
 
-    this.loadExamConfigurations(academicYearId);
+  onDateChange(date: string) {
+    this.markedOn.set(date);
+    this.resetSheetState();
+    this.validateDateSelection();
+  }
+
+  onExamConfigurationChange(examConfigurationId: string) {
+    this.examConfigurationId.set(examConfigurationId);
+    this.resetSheetState();
   }
 
   loadSheet() {
+    const classId = Number(this.classId());
+    const academicYearId = Number(this.academicYearId());
     const sectionId = Number(this.sectionId());
     const subjectId = Number(this.subjectId());
-    const subjectCode = this.subjectCode().trim();
     const examConfigurationId = Number(this.examConfigurationId());
 
-    if (!sectionId || (!subjectId && !subjectCode) || !examConfigurationId) {
-      this.error.set('Select section, subject, and configured exam.');
+    if (!classId || !academicYearId || !subjectId || !examConfigurationId) {
+      this.error.set('Select class, academic year, subject, date, and configured exam.');
+      return;
+    }
+
+    if (!this.validateDateSelection()) {
       return;
     }
 
     this.loading.set(true);
     this.error.set(null);
     this.message.set(null);
+    this.emptyStateMessage.set(null);
 
     this.adminMarksService
       .sheet({
-        section_id: sectionId,
-        subject_id: subjectId || undefined,
-        subject_code: subjectCode || undefined,
+        class_id: classId,
+        academic_year_id: academicYearId,
+        section_id: sectionId || undefined,
+        subject_id: subjectId,
+        subject_code: this.subjectCode() || undefined,
         marked_on: this.markedOn() || undefined,
         exam_configuration_id: examConfigurationId
       })
       .subscribe({
         next: (response) => {
           this.scope.set(response.scope);
-          this.loadExamConfigurations(Number(response.scope?.academic_year_id || 0));
           this.markedOn.set(response.marked_on);
           this.subjectId.set(String(response.scope.subject_id));
           this.subjectCode.set(response.scope.subject_code || '');
@@ -181,8 +229,16 @@ export class AdminAssignMarksComponent {
             this.examConfigurationId.set(String(response.scope.exam_configuration_id));
           }
           this.teachers.set(response.teachers || []);
-          this.rows.set((response.rows || []).map((row) => ({ ...row })));
+          const targetIds = this.targetEnrollmentIds();
+          const rows = (response.rows || []).map((row) => ({
+            ...row,
+            compiled_is_absent: (row.compiled_remarks || '').trim().toUpperCase() === 'A',
+          }));
+          this.rows.set(targetIds.length > 0
+            ? rows.filter((row) => targetIds.includes(row.enrollment_id))
+            : rows);
           this.isFinalized.set(!!response.is_finalized);
+          this.emptyStateMessage.set(response.empty_state_message || null);
           this.loading.set(false);
         },
         error: (err) => {
@@ -193,12 +249,17 @@ export class AdminAssignMarksComponent {
   }
 
   saveCompiled() {
+    const classId = Number(this.classId());
+    const academicYearId = Number(this.academicYearId());
     const sectionId = Number(this.sectionId());
     const subjectId = Number(this.subjectId());
-    const subjectCode = this.subjectCode().trim();
     const examConfigurationId = Number(this.examConfigurationId());
-    if (!sectionId || (!subjectId && !subjectCode) || !examConfigurationId) {
-      this.error.set('Select section, subject, and configured exam.');
+
+    if (!classId || !academicYearId || !subjectId || !examConfigurationId) {
+      this.error.set('Select class, academic year, subject, date, and configured exam.');
+      return;
+    }
+    if (!this.validateDateSelection()) {
       return;
     }
     if (this.isFinalized()) {
@@ -216,9 +277,11 @@ export class AdminAssignMarksComponent {
 
     this.adminMarksService
       .compile({
-        section_id: sectionId,
-        subject_id: subjectId || undefined,
-        subject_code: subjectCode || undefined,
+        class_id: classId,
+        academic_year_id: academicYearId,
+        section_id: sectionId || undefined,
+        subject_id: subjectId,
+        subject_code: this.subjectCode() || undefined,
         marked_on: this.markedOn(),
         exam_configuration_id: examConfigurationId,
         rows: this.rows().map((row) => ({
@@ -242,16 +305,21 @@ export class AdminAssignMarksComponent {
   }
 
   finalize() {
+    const classId = Number(this.classId());
+    const academicYearId = Number(this.academicYearId());
     const sectionId = Number(this.sectionId());
     const subjectId = Number(this.subjectId());
-    const subjectCode = this.subjectCode().trim();
-    if (!sectionId || (!subjectId && !subjectCode)) {
-      this.error.set('Select section and subject.');
+    const examConfigurationId = Number(this.examConfigurationId());
+
+    if (!classId || !academicYearId || !subjectId) {
+      this.error.set('Select class, academic year, and subject.');
       return;
     }
-    const examConfigurationId = Number(this.examConfigurationId());
     if (!examConfigurationId) {
       this.error.set('Select exam from configured exam list.');
+      return;
+    }
+    if (!this.validateDateSelection()) {
       return;
     }
 
@@ -261,9 +329,11 @@ export class AdminAssignMarksComponent {
 
     this.adminMarksService
       .finalize({
-        section_id: sectionId,
-        subject_id: subjectId || undefined,
-        subject_code: subjectCode || undefined,
+        class_id: classId,
+        academic_year_id: academicYearId,
+        section_id: sectionId || undefined,
+        subject_id: subjectId,
+        subject_code: this.subjectCode() || undefined,
         marked_on: this.markedOn(),
         exam_configuration_id: examConfigurationId
       })
@@ -280,44 +350,6 @@ export class AdminAssignMarksComponent {
       });
   }
 
-  private loadExamConfigurations(academicYearId: number) {
-    if (!academicYearId) {
-      this.examConfigurations.set([]);
-      this.examConfigurationAcademicYearId.set(null);
-      this.examConfigurationId.set('');
-      return;
-    }
-
-    if (this.examConfigurationAcademicYearId() === academicYearId && this.examConfigurations().length > 0) {
-      return;
-    }
-
-    const selectedExamId = Number(this.examConfigurationId() || 0);
-
-    this.examConfigurationsService
-      .list({ academic_year_id: academicYearId, active_only: true })
-      .subscribe({
-        next: (response) => {
-          const exams = response.data || [];
-          this.examConfigurations.set(exams);
-          this.examConfigurationAcademicYearId.set(academicYearId);
-
-          const selectedStillExists = selectedExamId > 0 && exams.some((exam) => Number(exam.id) === selectedExamId);
-          if (selectedStillExists) {
-            return;
-          }
-
-          this.examConfigurationId.set(exams.length > 0 ? String(exams[0].id) : '');
-        },
-        error: (err) => {
-          this.error.set(err?.error?.message || 'Unable to load configured exams.');
-          this.examConfigurations.set([]);
-          this.examConfigurationAcademicYearId.set(null);
-          this.examConfigurationId.set('');
-        }
-      });
-  }
-
   onCompiledMarksChange(row: AdminMarksRow, value: string | number | null) {
     row.compiled_marks_obtained = this.toNullableNumber(value);
     this.rows.set([...this.rows()]);
@@ -330,6 +362,17 @@ export class AdminAssignMarksComponent {
 
   onCompiledRemarksChange(row: AdminMarksRow, value: string) {
     row.compiled_remarks = value;
+    this.rows.set([...this.rows()]);
+  }
+
+  onCompiledAbsentChange(row: AdminMarksRow, absent: boolean) {
+    (row as AdminMarksRow & { compiled_is_absent?: boolean }).compiled_is_absent = absent;
+    if (absent) {
+      row.compiled_marks_obtained = null;
+      row.compiled_remarks = 'A';
+    } else if ((row.compiled_remarks || '').trim().toUpperCase() === 'A') {
+      row.compiled_remarks = '';
+    }
     this.rows.set([...this.rows()]);
   }
 
@@ -386,7 +429,9 @@ export class AdminAssignMarksComponent {
         .join('\n');
 
       const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-      this.downloadBlob(blob, this.buildFileName(scope, 'csv'));
+      const fileName = this.buildFileName(scope, 'csv');
+      this.downloadBlob(blob, fileName);
+      this.logDownload('csv', fileName, blob);
       this.message.set('Marks Excel download started.');
     } catch {
       this.error.set('Unable to generate Excel export.');
@@ -496,13 +541,142 @@ export class AdminAssignMarksComponent {
         y += 16;
       });
 
-      doc.save(this.buildFileName(scope, 'pdf'));
+      const fileName = this.buildFileName(scope, 'pdf');
+      const blob = doc.output('blob');
+      this.downloadBlob(blob, fileName);
+      this.logDownload('pdf', fileName, blob);
       this.message.set('Marks PDF download started.');
     } catch {
       this.error.set('Unable to generate PDF export.');
     } finally {
       this.downloadingPdf.set(false);
     }
+  }
+
+  private loadFilters(classId: number, sectionId?: number) {
+    this.loadingFilters.set(true);
+    this.error.set(null);
+    this.message.set(null);
+
+    this.adminMarksService.filters({
+      class_id: classId,
+      academic_year_id: Number(this.academicYearId()),
+      section_id: sectionId,
+    }).subscribe({
+      next: (response) => {
+        this.loadingFilters.set(false);
+        this.filters.set(response);
+
+        const sections = response.sections || [];
+        const subjects = response.subjects || [];
+        const exams = response.exam_configurations || [];
+
+        const resolvedSectionId = response.section_id ? String(response.section_id) : '';
+        this.sectionId.set(resolvedSectionId);
+        this.pendingSectionId = null;
+
+        if (response.academic_year) {
+          if (this.pendingMarkedOn) {
+            this.markedOn.set(this.pendingMarkedOn);
+            this.pendingMarkedOn = null;
+          }
+
+          if (!this.isDateWithinAcademicYear(this.markedOn())) {
+            this.markedOn.set(response.academic_year.end_date);
+          }
+        }
+
+        const subjectId = this.pickValidOption(this.pendingSubjectId, subjects.map((item) => String(item.id)));
+        this.subjectId.set(subjectId);
+        this.pendingSubjectId = null;
+
+        const selectedSubject = subjects.find((item) => String(item.id) === subjectId);
+        this.subjectCode.set(selectedSubject?.subject_code || selectedSubject?.code || '');
+
+        const preferredExamId = selectedSubject?.academic_year_exam_config_id ? String(selectedSubject.academic_year_exam_config_id) : null;
+        const examId = this.pickValidOption(
+          this.pendingExamConfigurationId || preferredExamId,
+          exams.map((item) => String(item.id))
+        );
+        this.examConfigurationId.set(examId);
+        this.pendingExamConfigurationId = null;
+      },
+      error: (err) => {
+        this.loadingFilters.set(false);
+        this.filters.set(null);
+        this.error.set(err?.error?.message || 'Unable to load marks filters.');
+      }
+    });
+  }
+
+  private pickValidOption(preferredValue: string | null, options: string[]): string {
+    if (preferredValue && options.includes(preferredValue)) {
+      return preferredValue;
+    }
+
+    return options[0] || '';
+  }
+
+  private validateDateSelection(): boolean {
+    const year = this.academicYear();
+    if (!year) {
+      this.error.set('Academic year is not available for the selected class/section.');
+      return false;
+    }
+
+    if (!this.markedOn()) {
+      this.error.set('Select marks date.');
+      return false;
+    }
+
+    if (!this.isDateWithinAcademicYear(this.markedOn())) {
+      this.error.set(`Date must be within the academic year (${year.start_date} to ${year.end_date}).`);
+      return false;
+    }
+
+    return true;
+  }
+
+  private isDateWithinAcademicYear(date: string): boolean {
+    const year = this.academicYear();
+    if (!year || !date) {
+      return false;
+    }
+
+    return date >= year.start_date && date <= year.end_date;
+  }
+
+  private resetSheetState() {
+    this.rows.set([]);
+    this.scope.set(null);
+    this.teachers.set([]);
+    this.isFinalized.set(false);
+    this.emptyStateMessage.set(null);
+    this.error.set(null);
+    this.message.set(null);
+  }
+
+  private tryLoadFilters() {
+    const classId = Number(this.classId());
+    const academicYearId = Number(this.academicYearId());
+
+    this.filters.set(null);
+    if (!classId || !academicYearId) {
+      return;
+    }
+
+    this.loadFilters(classId, this.pendingSectionId ? Number(this.pendingSectionId) : Number(this.sectionId() || 0) || undefined);
+  }
+
+  private clearFilterSelections(clearAcademicYear: boolean) {
+    if (clearAcademicYear) {
+      this.academicYearId.set('');
+    }
+    this.sectionId.set('');
+    this.subjectId.set('');
+    this.subjectCode.set('');
+    this.examConfigurationId.set('');
+    this.filters.set(null);
   }
 
   private toNullableNumber(value: string | number | null): number | null {
@@ -526,6 +700,50 @@ export class AdminAssignMarksComponent {
     anchor.download = filename;
     anchor.click();
     window.URL.revokeObjectURL(url);
+  }
+
+  private logDownload(format: 'csv' | 'pdf', fileName: string, blob?: Blob) {
+    const scope = this.scope();
+    if (!scope) {
+      return;
+    }
+
+    this.buildChecksum(blob).then((checksum) => {
+      this.auditDownloadsService.logDownload({
+        module: 'assign_marks',
+        report_key: 'final_marks_sheet',
+        report_label: 'Final Marks Sheet',
+        format,
+        file_name: fileName,
+        file_checksum: checksum,
+        row_count: this.rows().length,
+        filters: {
+          class_id: scope.class_id,
+          section_id: scope.section_id,
+          subject_id: scope.subject_id,
+          academic_year_id: scope.academic_year_id,
+          exam_configuration_id: scope.exam_configuration_id,
+          marked_on: this.markedOn(),
+        },
+        context: {
+          class_name: scope.class_name,
+          section_name: scope.section_name,
+          subject_name: scope.subject_name,
+          academic_year_name: scope.academic_year_name,
+        },
+      }).subscribe({ error: () => void 0 });
+    });
+  }
+
+  private async buildChecksum(blob?: Blob): Promise<string | null> {
+    if (!blob || !window.crypto?.subtle) {
+      return null;
+    }
+
+    const buffer = await blob.arrayBuffer();
+    const digest = await window.crypto.subtle.digest('SHA-256', buffer);
+
+    return Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, '0')).join('');
   }
 
   private buildFileName(scope: AdminMarksScope, extension: 'pdf' | 'csv'): string {

@@ -1,0 +1,182 @@
+<section class="events-admin">
+  <header class="events-admin__hero">
+    <div>
+      <p class="eyebrow">Event Certificates</p>
+      <h1>Manage events, participants, and winner certificates</h1>
+      <p class="muted">Create school events, add participating students, set 1st/2nd/3rd ranks, and generate polished participant or winner certificates.</p>
+    </div>
+    <button type="button" class="btn btn--ghost" (click)="startNew()">New Event</button>
+  </header>
+
+  <p *ngIf="message()" class="notice notice--success">{{ message() }}</p>
+  <p *ngIf="error()" class="notice notice--error">{{ error() }}</p>
+  <p *ngIf="savingEvent() || savingParticipants() || searchLoading() || deletingEvent() || selectingEventId() || certificateLoadingKey()" class="notice notice--info">
+    Processing your request. Please wait...
+  </p>
+
+  <div class="events-admin__layout">
+    <aside class="panel">
+      <div class="panel__header">
+        <h2>Events</h2>
+      </div>
+      <p *ngIf="loading()" class="muted">Loading events...</p>
+      <div class="event-list" *ngIf="!loading()">
+        <button
+          type="button"
+          class="event-card"
+          *ngFor="let event of events()"
+          [class.event-card--active]="selectedEvent()?.id === event.id"
+          [disabled]="selectingEventId() === event.id || savingEvent() || savingParticipants() || deletingEvent()"
+          (click)="selectEvent(event.id)"
+        >
+          <strong>{{ selectingEventId() === event.id ? 'Opening...' : event.title }}</strong>
+          <span>{{ event.event_date || 'No date' }}</span>
+          <span>{{ event.participants_count || 0 }} participants</span>
+          <span>{{ event.ranked_count || 0 }} ranked</span>
+        </button>
+      </div>
+    </aside>
+
+    <div class="stack">
+      <section class="panel">
+        <div class="panel__header">
+          <h2>{{ selectedEvent() ? 'Edit Event' : 'Create Event' }}</h2>
+          <button *ngIf="selectedEvent()" type="button" class="btn btn--danger" [disabled]="deletingEvent() || savingEvent() || savingParticipants()" (click)="deleteEvent()">
+            {{ deletingEvent() ? 'Deleting...' : 'Delete' }}
+          </button>
+        </div>
+
+        <form class="event-form" [formGroup]="eventForm" (ngSubmit)="saveEvent()">
+          <label>
+            <span>Academic Year</span>
+            <select formControlName="academic_year_id">
+              <option value="">Optional</option>
+              <option *ngFor="let year of academicYears()" [value]="year.id">{{ year.name }}</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Event Title</span>
+            <input type="text" formControlName="title" placeholder="Annual Sports Day" />
+          </label>
+
+          <label>
+            <span>Event Date</span>
+            <input type="date" formControlName="event_date" />
+          </label>
+
+          <label>
+            <span>Venue</span>
+            <input type="text" formControlName="venue" placeholder="Main Ground" />
+          </label>
+
+          <label>
+            <span>Status</span>
+            <select formControlName="status">
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+              <option value="archived">Archived</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Certificate Prefix</span>
+            <input type="text" formControlName="certificate_prefix" placeholder="EVT" />
+          </label>
+
+          <label class="event-form__full">
+            <span>Description</span>
+            <textarea formControlName="description" rows="3" placeholder="Optional event notes"></textarea>
+          </label>
+
+          <div class="actions">
+            <button type="submit" class="btn" [disabled]="savingEvent() || savingParticipants() || deletingEvent()">
+              {{ savingEvent() ? 'Saving Event...' : 'Save Event' }}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel__header">
+          <h2>Participants</h2>
+          <button type="button" class="btn" [disabled]="!canSaveParticipants() || savingParticipants() || savingEvent() || deletingEvent()" (click)="saveParticipants()">
+            {{ savingParticipants() ? 'Saving Participants...' : 'Save Participants' }}
+          </button>
+        </div>
+
+        <div *ngIf="!selectedEvent()" class="muted">Create or select an event first, then add participants.</div>
+
+        <div *ngIf="selectedEvent()" class="participant-tools">
+          <p class="helper-text">Add students first, then click <strong>Save Participants</strong>. If you change rank or remarks and click a certificate button directly, the app will save first and then generate it.</p>
+
+          <form class="search-bar" [formGroup]="searchForm" (ngSubmit)="searchEnrollments()">
+            <input type="text" formControlName="search" placeholder="Search by student name, email, admission no, or roll no" />
+            <button type="submit" class="btn" [disabled]="searchLoading() || savingParticipants() || savingEvent()">{{ searchLoading() ? 'Searching...' : 'Search Active Enrollments' }}</button>
+          </form>
+
+          <div class="search-results" *ngIf="enrollmentResults().length">
+            <button type="button" class="search-result" *ngFor="let enrollment of enrollmentResults()" [disabled]="savingParticipants() || savingEvent() || deletingEvent()" (click)="addEnrollment(enrollment)">
+              <strong>{{ enrollment.student?.user?.full_name || '-' }}</strong>
+              <span>{{ enrollment.student?.admission_number || '-' }}</span>
+              <span>{{ enrollment.classModel?.name || enrollment.section?.class?.name || '-' }} / {{ enrollment.section?.name || '-' }}</span>
+              <span class="search-result__cta">Add participant</span>
+            </button>
+          </div>
+
+          <table class="participant-table" *ngIf="participantDrafts().length; else noParticipants">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Class</th>
+                <th>Rank</th>
+                <th>Achievement</th>
+                <th>Remarks</th>
+                <th>Certificates</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let participant of participantDrafts(); let i = index">
+                <td>
+                  <strong>{{ participant.student_name }}</strong>
+                  <div class="muted">{{ participant.admission_number }}</div>
+                </td>
+                <td>{{ participant.class_section }}</td>
+                <td>
+                  <select [ngModel]="participantRankValue(participant)" (ngModelChange)="updateParticipantRank(i, $event)" [ngModelOptions]="{ standalone: true }">
+                    <option value="">Participant</option>
+                    <option value="1">1st</option>
+                    <option value="2">2nd</option>
+                    <option value="3">3rd</option>
+                  </select>
+                </td>
+                <td>
+                  <input type="text" [ngModel]="participant.achievement_title || ''" (ngModelChange)="onParticipantFieldChange(i, 'achievement_title', $event)" [ngModelOptions]="{ standalone: true }" placeholder="100m Race" />
+                </td>
+                <td>
+                  <input type="text" [ngModel]="participant.remarks || ''" (ngModelChange)="onParticipantFieldChange(i, 'remarks', $event)" [ngModelOptions]="{ standalone: true }" placeholder="Excellent spirit" />
+                </td>
+                <td class="certificate-actions">
+                  <button type="button" class="btn btn--tiny" [disabled]="!canDownloadParticipantCertificate(participant)" (click)="downloadCertificate(participant.id!, 'participant', participant.student_name)">
+                    {{ isCertificateLoading(participant.id!, 'participant') ? 'Generating...' : (participant.id ? 'Participant' : 'Save First') }}
+                  </button>
+                  <button type="button" class="btn btn--tiny btn--gold" [disabled]="!canDownloadWinnerCertificate(participant)" (click)="downloadCertificate(participant.id!, 'winner', participant.student_name)">
+                    {{ participant.id ? (isCertificateLoading(participant.id!, 'winner') ? 'Generating...' : (participant.rank ? 'Winner' : 'Set Rank')) : 'Save First' }}
+                  </button>
+                </td>
+                <td>
+                  <button type="button" class="btn btn--tiny btn--danger" [disabled]="savingParticipants() || savingEvent() || deletingEvent()" (click)="removeParticipant(i)">Remove</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <ng-template #noParticipants>
+            <p class="muted">No participants added yet. Search active enrollments and add students to this event.</p>
+          </ng-template>
+        </div>
+      </section>
+    </div>
+  </div>
+</section>
