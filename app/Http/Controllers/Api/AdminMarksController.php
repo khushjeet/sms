@@ -101,13 +101,16 @@ class AdminMarksController extends Controller
             ->when(!empty($sectionIds), fn ($query) => $query->whereIn('section_id', $sectionIds))
             ->get();
 
-        $compiledMarks = CompiledMark::query()
+        $compiledMarksQuery = CompiledMark::query()
             ->where('subject_id', $scope['subject_id'])
             ->where('academic_year_id', $scope['academic_year_id'])
             ->where('exam_configuration_id', (int) $examConfig->id)
             ->whereDate('marked_on', $markedOn)
-            ->whereIn('enrollment_id', $enrollmentIds)
-            ->when(!empty($sectionIds), fn ($query) => $query->whereIn('section_id', $sectionIds))
+            ->whereIn('enrollment_id', $enrollmentIds);
+
+        $this->applyNullableSectionMatch($compiledMarksQuery, $sectionIds, $rows->contains(fn (array $row) => $row['section_id'] === null));
+
+        $compiledMarks = $compiledMarksQuery
             ->get()
             ->keyBy('enrollment_id');
 
@@ -253,10 +256,15 @@ class AdminMarksController extends Controller
             ], 422);
         }
 
+        $enrollmentSectionIds = Enrollment::query()
+            ->whereIn('id', $submittedEnrollmentIds)
+            ->pluck('section_id', 'id')
+            ->map(fn ($sectionId) => $sectionId !== null ? (int) $sectionId : null);
+
         $defaultMaxMarks = $scope['mapped_max_marks'] ?? 100.0;
         $now = now();
 
-        DB::transaction(function () use ($validated, $scope, $examConfig, $markedOn, $defaultMaxMarks, $userId, $now) {
+        DB::transaction(function () use ($validated, $scope, $examConfig, $markedOn, $defaultMaxMarks, $userId, $now, $enrollmentSectionIds) {
             foreach ($validated['rows'] as $row) {
                 $maxMarks = array_key_exists('max_marks', $row) && $row['max_marks'] !== null
                     ? (float) $row['max_marks']
@@ -271,15 +279,21 @@ class AdminMarksController extends Controller
                     ]);
                 }
 
-                $sectionId = (int) Enrollment::query()->whereKey((int) $row['enrollment_id'])->value('section_id');
-                $compiledMark = CompiledMark::query()
+                $sectionId = $enrollmentSectionIds->get((int) $row['enrollment_id']);
+                $compiledMarkQuery = CompiledMark::query()
                     ->where('enrollment_id', (int) $row['enrollment_id'])
                     ->where('subject_id', $scope['subject_id'])
-                    ->where('section_id', $sectionId)
                     ->where('academic_year_id', $scope['academic_year_id'])
                     ->where('exam_configuration_id', (int) $examConfig->id)
-                    ->whereDate('marked_on', $markedOn)
-                    ->first();
+                    ->whereDate('marked_on', $markedOn);
+
+                if ($sectionId === null) {
+                    $compiledMarkQuery->whereNull('section_id');
+                } else {
+                    $compiledMarkQuery->where('section_id', $sectionId);
+                }
+
+                $compiledMark = $compiledMarkQuery->first();
 
                 if (!$compiledMark) {
                     $compiledMark = new CompiledMark([
@@ -516,11 +530,6 @@ class AdminMarksController extends Controller
                 ->values()
                 ->all();
 
-            if (empty($sectionIds)) {
-                throw ValidationException::withMessages([
-                    'section_id' => ['No sections found for the selected class and academic year.'],
-                ]);
-            }
         }
 
         $subjectQuery = DB::table('subjects');
@@ -647,29 +656,6 @@ class AdminMarksController extends Controller
             ->orderBy('sec.name')
             ->get();
 
-        if ($sections->isEmpty()) {
-            return [
-                'class_id' => (int) $class->id,
-                'class_name' => $class->name,
-                'academic_year_id' => (int) $academicYear->id,
-                'section_id' => null,
-                'academic_year' => [
-                    'id' => (int) $academicYear->id,
-                    'name' => $academicYear->name,
-                    'start_date' => Carbon::parse((string) $academicYear->start_date)->toDateString(),
-                    'end_date' => Carbon::parse((string) $academicYear->end_date)->toDateString(),
-                    'is_current' => (bool) $academicYear->is_current,
-                ],
-                'sections' => [],
-                'subjects' => [],
-                'exam_configurations' => [],
-                'messages' => [
-                    'sections' => 'No sections are available for the selected class.',
-                    'academic_year' => 'No section is mapped for the selected class in this academic year.',
-                ],
-            ];
-        }
-
         $selectedSection = $sectionId
             ? $sections->firstWhere('id', $sectionId)
             : null;
@@ -681,34 +667,6 @@ class AdminMarksController extends Controller
         }
 
         $effectiveSection = $selectedSection ?: $sections->first();
-
-        if (!$effectiveSection) {
-            return [
-                'class_id' => (int) $class->id,
-                'class_name' => $class->name,
-                'academic_year_id' => (int) $academicYear->id,
-                'section_id' => $selectedSection ? (int) $selectedSection->id : null,
-                'academic_year' => [
-                    'id' => (int) $academicYear->id,
-                    'name' => $academicYear->name,
-                    'start_date' => Carbon::parse((string) $academicYear->start_date)->toDateString(),
-                    'end_date' => Carbon::parse((string) $academicYear->end_date)->toDateString(),
-                    'is_current' => (bool) $academicYear->is_current,
-                ],
-                'sections' => $sections->map(fn ($row) => [
-                    'id' => (int) $row->id,
-                    'name' => $row->name,
-                    'class_id' => (int) $row->class_id,
-                    'academic_year_id' => $row->academic_year_id !== null ? (int) $row->academic_year_id : null,
-                    'status' => $row->status,
-                ])->values(),
-                'subjects' => [],
-                'exam_configurations' => [],
-                'messages' => [
-                    'academic_year' => 'Academic year is not mapped for the selected class/section.',
-                ],
-            ];
-        }
 
         $sectionsForYear = $sections
             ->map(fn ($row) => [
@@ -764,6 +722,10 @@ class AdminMarksController extends Controller
             ->values();
 
         $messages = [];
+        if (!$effectiveSection) {
+            $messages['sections'] = 'No sections are available for the selected class. Marks can still be assigned directly to enrollments without sections.';
+            $messages['academic_year'] = 'No section is mapped for the selected class in this academic year.';
+        }
         if ($subjects->isEmpty()) {
             $messages['subjects'] = 'Subject not assigned for the selected class in this academic year.';
         }
@@ -788,6 +750,27 @@ class AdminMarksController extends Controller
             'exam_configurations' => $examConfigurations,
             'messages' => $messages,
         ];
+    }
+
+    private function applyNullableSectionMatch($query, array $sectionIds, bool $includeNullSection)
+    {
+        if (empty($sectionIds) && !$includeNullSection) {
+            return $query;
+        }
+
+        return $query->where(function ($sectionQuery) use ($sectionIds, $includeNullSection) {
+            if (!empty($sectionIds)) {
+                $sectionQuery->whereIn('section_id', $sectionIds);
+            }
+
+            if ($includeNullSection) {
+                if (!empty($sectionIds)) {
+                    $sectionQuery->orWhereNull('section_id');
+                } else {
+                    $sectionQuery->whereNull('section_id');
+                }
+            }
+        });
     }
 
     private function validateMarkedOnWithinAcademicYear(array $scope, string $markedOn): void
@@ -859,7 +842,7 @@ class AdminMarksController extends Controller
             'action' => $action,
             'enrollment_id' => (int) $compiledMark->enrollment_id,
             'subject_id' => (int) $compiledMark->subject_id,
-            'section_id' => (int) $compiledMark->section_id,
+            'section_id' => $compiledMark->section_id !== null ? (int) $compiledMark->section_id : null,
             'academic_year_id' => (int) $compiledMark->academic_year_id,
             'exam_configuration_id' => $compiledMark->exam_configuration_id !== null ? (int) $compiledMark->exam_configuration_id : null,
             'exam_session_id' => $compiledMark->exam_session_id !== null ? (int) $compiledMark->exam_session_id : null,

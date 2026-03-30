@@ -190,7 +190,7 @@ class ResultPublishingController extends Controller
             ->where('is_finalized', true)
             ->whereIn('section_id', $sectionIds)
             ->whereIn('enrollment_id', $activeEnrollmentIds)
-            ->select('enrollment_id', 'subject_id', 'marks_obtained', 'max_marks', 'remarks')
+            ->select('id', 'enrollment_id', 'subject_id', 'marks_obtained', 'max_marks', 'remarks', 'marked_on', 'finalized_at')
             ->get();
 
         // Backward-compatible fallback for legacy finalized rows without exam_session_id.
@@ -202,9 +202,18 @@ class ResultPublishingController extends Controller
                 ->where('is_finalized', true)
                 ->whereIn('section_id', $sectionIds)
                 ->whereIn('enrollment_id', $activeEnrollmentIds)
-                ->select('enrollment_id', 'subject_id', 'marks_obtained', 'max_marks', 'remarks')
+                ->select('id', 'enrollment_id', 'subject_id', 'marks_obtained', 'max_marks', 'remarks', 'marked_on', 'finalized_at')
                 ->get();
         }
+
+        $compiled = $compiled
+            ->sortBy([
+                ['finalized_at', 'desc'],
+                ['marked_on', 'desc'],
+                ['id', 'desc'],
+            ])
+            ->unique(fn ($row) => (int) $row->enrollment_id . ':' . (int) $row->subject_id)
+            ->values();
 
         if ($compiled->isEmpty()) {
             return response()->json(['message' => 'No finalized compiled marks found for class/date.'], 422);
@@ -800,6 +809,8 @@ class ResultPublishingController extends Controller
         );
         $totalPassingMarks = 0.0;
         $subjects = $result->snapshots
+            ->sortByDesc(fn(ResultMarkSnapshot $snapshot) => (int) $snapshot->id)
+            ->unique(fn(ResultMarkSnapshot $snapshot) => (int) $snapshot->subject_id)
             ->sortBy(fn(ResultMarkSnapshot $snapshot) => $snapshot->subject_name_snapshot ?: ($snapshot->subject?->name ?? ''))
             ->values()
             ->map(function (ResultMarkSnapshot $snapshot) use (&$totalPassingMarks) {
@@ -1059,6 +1070,11 @@ class ResultPublishingController extends Controller
             foreach ($rows as $row) {
                 $enrollmentId = (int) $row['enrollment_id'];
                 $studentId = (int) $enrollmentMap->get($enrollmentId)->student_id;
+                $subjects = collect($row['subjects'] ?? [])
+                    ->reverse()
+                    ->unique(fn(array $subject) => (int) ($subject['subject_id'] ?? 0))
+                    ->values()
+                    ->all();
 
                 $latest = StudentResult::query()
                     ->where('exam_session_id', $session->id)
@@ -1077,7 +1093,7 @@ class ResultPublishingController extends Controller
                 $totalMarks = 0.0;
                 $totalMaxMarks = 0.0;
 
-                foreach ($row['subjects'] as $subject) {
+                foreach ($subjects as $subject) {
                     $obtained = (float) $subject['obtained_marks'];
                     $max = (float) $subject['max_marks'];
                     if ($obtained > $max) {
@@ -1115,7 +1131,7 @@ class ResultPublishingController extends Controller
                     'verification_status' => 'active',
                 ]);
 
-                foreach ($row['subjects'] as $subject) {
+                foreach ($subjects as $subject) {
                     $isAbsent = (bool) ($subject['is_absent'] ?? false);
                     $subjectId = (int) $subject['subject_id'];
                     $subjectMeta = $subjectMap->get($subjectId);

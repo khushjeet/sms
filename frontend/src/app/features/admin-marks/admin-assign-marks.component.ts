@@ -15,6 +15,7 @@ import {
 import { AcademicYear } from '../../models/academic-year';
 import { ClassModel } from '../../models/class';
 import { ClassesService } from '../../core/services/classes.service';
+import { extractApiError } from '../../core/utils/api-error.util';
 
 @Component({
   selector: 'app-admin-assign-marks',
@@ -67,10 +68,12 @@ export class AdminAssignMarksComponent {
       return [];
     }
 
-    return Object.values(messages).filter((value): value is string => !!value);
+    return Object.entries(messages)
+      .filter(([key, value]) => key !== 'sections' && key !== 'academic_year' && !!value)
+      .map(([, value]) => value as string);
   });
 
-  readonly showSectionSelect = computed(() => this.classId() !== '' && this.availableSections().length > 0);
+  readonly showSectionSelect = computed(() => !!this.classId() && !!this.academicYearId() && this.availableSections().length > 0);
   readonly showAllSectionsHint = computed(() => !this.sectionId() && this.availableSections().length > 1);
   readonly hasAcademicYear = computed(() => !!this.academicYear());
   readonly canPickSubject = computed(() => !!this.classId() && this.hasAcademicYear() && this.availableSubjects().length > 0);
@@ -78,6 +81,28 @@ export class AdminAssignMarksComponent {
   readonly canPickExamConfiguration = computed(() => this.canPickDate() && this.examConfigurations().length > 0);
   readonly canLoadSheet = computed(() => !!this.classId() && !!this.academicYearId() && !!this.subjectId() && !!this.examConfigurationId() && !!this.markedOn());
   readonly canDownload = computed(() => this.isFinalized() && this.rows().length > 0 && !!this.scope());
+  readonly subjectPlaceholder = computed(() => {
+    if (!this.classId()) {
+      return 'Select class first';
+    }
+    if (!this.hasAcademicYear()) {
+      return 'Select academic year first';
+    }
+    if (this.availableSubjects().length === 0) {
+      return 'No subjects configured';
+    }
+    return 'Select subject';
+  });
+  readonly examConfigurationPlaceholder = computed(() => {
+    if (!this.subjectId()) {
+      return 'Select subject first';
+    }
+    if (this.examConfigurations().length === 0) {
+      return 'No exam configured';
+    }
+    return 'Select configured exam';
+  });
+  readonly showNoSectionInfo = computed(() => !!this.classId() && this.hasAcademicYear() && this.availableSections().length === 0);
 
   private pendingSectionId: string | null = null;
   private pendingSubjectId: string | null = null;
@@ -98,7 +123,7 @@ export class AdminAssignMarksComponent {
       },
       error: (err) => {
         this.loading.set(false);
-        this.error.set(err?.error?.message || 'Unable to load classes.');
+        this.error.set(extractApiError(err, 'Unable to load classes.'));
       }
     });
   }
@@ -243,7 +268,7 @@ export class AdminAssignMarksComponent {
         },
         error: (err) => {
           this.loading.set(false);
-          this.error.set(err?.error?.message || 'Unable to load marks sheet.');
+          this.error.set(extractApiError(err, 'Unable to load marks sheet.'));
         }
       });
   }
@@ -299,7 +324,7 @@ export class AdminAssignMarksComponent {
         },
         error: (err) => {
           this.saving.set(false);
-          this.error.set(err?.error?.message || 'Unable to save compiled marks.');
+          this.error.set(extractApiError(err, 'Unable to save compiled marks.'));
         }
       });
   }
@@ -345,7 +370,7 @@ export class AdminAssignMarksComponent {
         },
         error: (err) => {
           this.finalizing.set(false);
-          this.error.set(err?.error?.message || 'Unable to finalize marks.');
+          this.error.set(extractApiError(err, 'Unable to finalize marks.'));
         }
       });
   }

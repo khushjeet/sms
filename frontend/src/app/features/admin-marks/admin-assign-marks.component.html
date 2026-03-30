@@ -24,7 +24,7 @@
     </select>
 
     <select [ngModel]="subjectId()" (ngModelChange)="onSubjectChange($event)" [disabled]="!canPickSubject()">
-      <option value="">{{ canPickSubject() ? 'Select subject' : 'Select class first' }}</option>
+      <option value="">{{ subjectPlaceholder() }}</option>
       <option *ngFor="let item of availableSubjects()" [value]="item.id">
         {{ item.name }} ({{ item.subject_code || item.code }})
       </option>
@@ -44,7 +44,7 @@
       (ngModelChange)="onExamConfigurationChange($event)"
       [disabled]="!canPickExamConfiguration()"
     >
-      <option value="">{{ canPickExamConfiguration() ? 'Select configured exam' : 'Select subject first' }}</option>
+      <option value="">{{ examConfigurationPlaceholder() }}</option>
       <option *ngFor="let exam of examConfigurations()" [value]="exam.id">
         {{ exam.sequence }}. {{ exam.name }}
       </option>
@@ -86,6 +86,10 @@
 
   <p class="scope" *ngIf="showAllSectionsHint()">
     Section is not selected, so students from all sections in this class/academic year will be shown.
+  </p>
+
+  <p class="scope" *ngIf="showNoSectionInfo()">
+    No section is mapped for this class in the selected academic year. Sections are optional here, so you can continue with subject, exam, and student-level marks.
   </p>
 
   <p class="scope" *ngIf="scope() as current">
